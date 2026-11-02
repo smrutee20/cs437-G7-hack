@@ -1,0 +1,22 @@
+{
+  "name": "cs437-g7-hack",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test --test-concurrency=1 --test-timeout=60000 test/*.test.js",
+    "test:e2e": "playwright test --config e2e/playwright.config.js"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.14",
+    "express": "^5.3.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

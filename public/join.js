@@ -3,7 +3,7 @@ import { api, el, hashParts, showMessage } from './ui.js';
 
 const page = document.getElementById('page');
 const { id: formId, secret: code } = hashParts();
-const storageKey = `anything:${formId}`;
+const storageKey = `anything:${formId}:${code}`;
 
 // Survives a refresh or a dropped connection. Removed once the ballot is spent.
 const load = () => { try { return JSON.parse(localStorage.getItem(storageKey)) ?? {}; } catch { return {}; } };

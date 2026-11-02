@@ -1,0 +1,148 @@
+@font-face { font-family: 'Bricolage Grotesque'; src: url('/fonts/bricolage.woff2') format('woff2'); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible'; src: url('/fonts/atkinson-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible'; src: url('/fonts/atkinson-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+
+:root {
+  --ground: #dcdff0;      /* the table the slip lies on */
+  --slip: #fbfbfe;        /* ballot paper */
+  --stub: #ece9f8;        /* the counterfoil, the half with a name */
+  --ink: #2e1f7a;         /* election ink */
+  --ink-soft: #5b4fa0;
+  --text: #1d1a33;
+  --muted: #565270;
+  --line: #bdbbd6;
+  --ok: #0c6650;
+  --bad: #a3231f;
+  --display: 'Bricolage Grotesque', 'Segoe UI', sans-serif;
+  --body: 'Atkinson Hyperlegible', 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--ground); color: var(--text); font: 400 1.0625rem/1.55 var(--body); }
+main, .top { width: min(100% - 32px, 760px); margin-inline: auto; }
+.top { padding: 20px 0 8px; }
+.brand { font: 700 1.25rem var(--display); color: var(--ink); text-decoration: none; }
+main { padding-bottom: 72px; }
+
+h1, h2, h3 { font-family: var(--display); line-height: 1.1; color: var(--ink); margin: 0; overflow-wrap: anywhere; }
+h1 { font-size: clamp(2.25rem, 8vw, 3.5rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.5rem; font-weight: 650; }
+h3 { font-size: 1.125rem; font-weight: 600; }
+p { margin: 0; max-width: 65ch; overflow-wrap: anywhere; }
+a { color: var(--ink); }
+.lede { font-size: 1.2rem; margin-top: 16px; }
+.muted { color: var(--muted); }
+.small { font-size: 0.95rem; }
+.stack > * + * { margin-top: 16px; }
+.section { margin-top: 40px; }
+.hidden { display: none !important; }
+
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+/* The slip: every page sits on a ballot with its counterfoil. The perforation marks the one line
+   that matters in this product: the name stays on one side, the answers go on the other. */
+.slip { display: grid; grid-template-columns: 11rem 1fr; background: var(--slip); margin-top: 28px; box-shadow: 0 1px 0 #fff inset, 0 10px 24px -14px rgba(46, 31, 122, .55); }
+.stub { background: var(--stub); padding: 20px 18px; position: relative; font-size: 0.95rem; }
+.stub::after { content: ''; position: absolute; inset: 0 -5px 0 auto; width: 10px; background: radial-gradient(circle, var(--ground) 3.5px, transparent 4px) center top / 10px 16px repeat-y; }
+.stub strong { display: block; font-family: var(--display); color: var(--ink); overflow-wrap: anywhere; }
+.face { padding: 20px 20px 20px 26px; min-width: 0; }
+.face h3 { margin-bottom: 8px; }
+.pips { display: flex; gap: 6px; margin-top: 10px; }
+.pips span { width: 2rem; height: 2rem; border: 1.5px solid var(--line); display: grid; place-items: center; font-weight: 700; }
+.pips .on { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+.join-slip { transition: none; }
+.join-slip.torn { grid-template-columns: 1fr; }
+.join-slip.torn .stub { display: none; }
+.tearing .stub { animation: tear .55s cubic-bezier(.5, 0, .9, .4) forwards; transform-origin: 100% 0; }
+@keyframes tear { to { transform: translate(-30px, 60px) rotate(-9deg); opacity: 0; } }
+
+/* Stacked on a phone: the perforation runs across. */
+@media (max-width: 620px) {
+  .slip { grid-template-columns: 1fr; }
+  .stub::after { inset: auto 0 -5px 0; width: auto; height: 10px; background: radial-gradient(circle, var(--ground) 3.5px, transparent 4px) left center / 16px 10px repeat-x; }
+  .face { padding: 24px 18px 20px; }
+  .tearing .stub { transform-origin: 0 100%; }
+  @keyframes tear { to { transform: translate(0, -40px) rotate(-3deg); opacity: 0; } }
+}
+
+.panel { background: var(--slip); padding: 24px 20px; margin-top: 16px; }
+
+label, legend, .label { display: block; font-weight: 700; margin-bottom: 6px; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+legend { padding: 0; overflow-wrap: anywhere; }
+input[type='text'], textarea, select {
+  width: 100%; font: inherit; color: inherit; background: #fff; border: 1.5px solid var(--line); border-radius: 2px; padding: 10px 12px;
+}
+input[type='text']:focus, textarea:focus, select:focus { border-color: var(--ink); }
+textarea { min-height: 7rem; resize: vertical; }
+.hint { font-size: 0.95rem; color: var(--muted); margin: 0 0 6px; }
+
+.question { border-left: 3px solid var(--ink); padding: 2px 0 2px 14px; margin-top: 22px; }
+.question .row { display: grid; grid-template-columns: 1fr 10rem; gap: 12px; margin-top: 12px; }
+.question .tick { display: flex; align-items: center; gap: 8px; font-weight: 400; margin: 12px 0 0; }
+.tick input { width: 1.2rem; height: 1.2rem; accent-color: var(--ink); }
+@media (max-width: 480px) { .question .row { grid-template-columns: 1fr; } }
+
+button, .button {
+  font: 700 1rem var(--body); padding: 12px 18px; min-height: 46px; border: 2px solid var(--ink); border-radius: 2px;
+  background: var(--ink); color: #fff; cursor: pointer; text-decoration: none; display: inline-block;
+}
+button:hover { background: #231660; }
+button:disabled { opacity: .55; cursor: wait; }
+button.quiet, .button.quiet { background: transparent; color: var(--ink); }
+button.quiet:hover { background: var(--stub); }
+button.small-btn, .button.small-btn { padding: 6px 10px; min-height: 36px; font-size: 0.95rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+
+/* Rating: a row of squares like the marks on a ballot. */
+.rating { display: flex; gap: 8px; }
+.rating label { margin: 0; flex: 1 1 0; max-width: 4rem; }
+.rating input, .choice input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.rating span { display: grid; place-items: center; height: 3rem; border: 1.5px solid var(--line); background: #fff; font-weight: 700; cursor: pointer; }
+.rating input:checked + span { background: var(--ink); border-color: var(--ink); color: #fff; }
+.rating input:focus-visible + span, .choice input:focus-visible + span { outline: 3px solid var(--ink); outline-offset: 2px; }
+.choice { display: block; margin: 6px 0 0; font-weight: 400; }
+.choice span { display: block; padding: 10px 12px; border: 1.5px solid var(--line); background: #fff; cursor: pointer; overflow-wrap: anywhere; }
+.choice input:checked + span { border-color: var(--ink); box-shadow: inset 4px 0 0 var(--ink); font-weight: 700; }
+
+.message { padding: 12px 14px; margin-top: 14px; border-left: 4px solid var(--bad); background: #fbeceb; color: #6f1512; }
+.message.good { border-color: var(--ok); background: #e5f3ef; color: #084435; }
+.message.note { border-color: var(--ink); background: var(--stub); color: var(--text); }
+
+.stamp { display: inline-block; margin: 8px 0 18px; padding: 8px 16px; border: 3px solid var(--ok); color: var(--ok); font: 700 1.05rem var(--display); transform: rotate(-3deg); animation: thud .28s ease-out; }
+@keyframes thud { from { transform: rotate(-3deg) scale(1.5); opacity: 0; } }
+
+.tally { display: flex; flex-wrap: wrap; gap: 8px 32px; margin-top: 8px; }
+.tally div { min-width: 6rem; }
+.tally b { display: block; font: 700 2.25rem/1.1 var(--display); color: var(--ink); }
+
+.bar-row { display: grid; grid-template-columns: minmax(0, 8rem) 1fr 2.5rem; gap: 10px; align-items: center; margin-top: 6px; }
+.bar-row .name { overflow-wrap: anywhere; }
+.bar { height: 14px; background: var(--stub); }
+.bar i { display: block; height: 100%; background: var(--ink); }
+.bar-row .n { text-align: right; font-weight: 700; }
+.result + .result { margin-top: 28px; }
+.result h3 { margin-bottom: 6px; }
+.average { font: 700 2rem var(--display); color: var(--ink); }
+.quotes { list-style: none; margin: 8px 0 0; padding: 0; }
+.quotes li { padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.people { list-style: none; margin: 12px 0 0; padding: 0; }
+.people li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.people .who { flex: 1 1 10rem; min-width: 0; overflow-wrap: anywhere; }
+.people .state { font-size: 0.95rem; color: var(--muted); }
+.steps { margin: 12px 0 0; padding-left: 1.3rem; }
+.steps li + li { margin-top: 8px; }
+.code { font-weight: 700; letter-spacing: .02em; color: var(--ink); }
+details { margin-top: 16px; }
+summary { cursor: pointer; font-weight: 700; color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tearing .stub, .stamp { animation: none; }
+}
+
+.panel .section { margin-top: 16px; }
+.panel h2 + .muted { margin-top: 6px; }

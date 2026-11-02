@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anything: anonymous feedback for a known group</title>
+  <meta name="description" content="Collect honest feedback from a known group at IITGN. Everyone on your list responds once, and no response can be traced back to a person.">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <header class="top"><a class="brand" href="/">Anything</a></header>
+  <main>
+    <h1>Everyone on the list gets one ballot. Nobody can tell whose is whose.</h1>
+    <p class="lede">Course feedback, mess feedback, club polls. You choose who can respond, each person can respond once, and the answers stay separate from the names.</p>
+
+    <div class="slip" aria-hidden="true">
+      <div class="stub"><strong>asha@iitgn.ac.in</strong>Name stays on this side, with the organiser.</div>
+      <div class="face">
+        <h3>How was the food this month?</h3>
+        <p class="muted small">No name on this side. The ballot is checked and counted without one.</p>
+        <div class="pips"><span>1</span><span>2</span><span>3</span><span class="on">4</span><span>5</span></div>
+      </div>
+    </div>
+
+    <section class="section panel" aria-labelledby="create-heading">
+      <h2 id="create-heading">Create a form</h2>
+      <p class="muted">No account needed. You get a private link to manage it.</p>
+      <form id="builder" class="stack section" novalidate>
+        <div>
+          <label for="title">Form title</label>
+          <input type="text" id="title" maxlength="200" required>
+        </div>
+        <div>
+          <label for="description">Note to respondents (optional)</label>
+          <input type="text" id="description" maxlength="2000">
+        </div>
+        <div id="questions"></div>
+        <div><button type="button" class="quiet" id="add-question">Add a question</button></div>
+        <div>
+          <label for="participants">Who can respond</label>
+          <p class="hint" id="participants-hint">One person per line: an email, roll number or name. Each gets a personal link.</p>
+          <textarea id="participants" aria-describedby="participants-hint" required></textarea>
+        </div>
+        <div id="builder-message"></div>
+        <div><button type="submit" id="create">Create form</button></div>
+      </form>
+    </section>
+  </main>
+  <script type="module" src="/index.js"></script>
+</body>
+</html>

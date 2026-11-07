@@ -26,6 +26,7 @@ Establish these root scripts in Milestone 0; they are **planned interfaces, not 
 
 - `npm run typecheck` and `npm run build` for static/build validation.
 - `npm run test:unit` for pure protocol, schema, and result-policy behavior.
+- `npm run test:signer` for the private native signer running in the pinned `workerd` binary (added in Milestone 1.2).
 - `npm run test:db` for API/database behavior against a real disposable PostgreSQL 17 instance.
 - `npm run test:browser` for Playwright tests in supported desktop Chromium and Firefox against two local HTTPS hostnames.
 - `npm run test` for the local aggregate, with distinct CI jobs for unit, DB, and browser evidence.
@@ -39,7 +40,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | Milestone | Status | Prerequisite | Main outcome |
 | --- | --- | --- | --- |
 | 0. Foundation | complete (with recorded caveats) | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
-| 1. Feasibility | in progress (1.1 complete) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
+| 1. Feasibility | in progress (1.1–1.2 complete) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | not started | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
 | 3. Anonymous issuance | not started | 2 | One durable blind claim per entitlement and reliable browser handoff. |
 | 4. Anonymous redemption | not started | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
@@ -109,6 +110,43 @@ A fresh local checkout can install, build, run unit/DB/browser runners against t
 - Pin `@cloudflare/blindrsa-ts@0.4.6`; stand up the isolated native `RSA-RAW` signer with the runtime/option specified by `SPEC.md`. Do not fall back to the package's JavaScript private-signing path or a custom RSA implementation.
 - Use RFC 9474 suite vectors as independent assertions. Exercise prepare → blind → private native sign → finalize → verify in Node and in supported browsers, including a persisted 111-byte prepared message. Check signer input/range rejection, private-operation protections/fault check, key creation/storage/restart, and two independent poll keys. Avoid recording key material or blind requests in output.
 - Capture the selected `workerd` release/container digest, real native option spelling, library pin/integrity, test commands, browser versions, and a short review of the actual private operation. A package README or a green mock test is not proof of native signing.
+
+**1.2 observed evidence** (commit `7e74f15`):
+
+*Pins:*
+- `@cloudflare/blindrsa-ts@0.4.6`: `sha512-n+CAo1hM78qkiouXB0Io1pPVBFKIaJqU7FqdCDNtBAB7q2bBpQOifv7Om3Jln/nx+IhjQAjlDjp8la3e9Yg9Bw==`.
+- `workerd@1.20261023.1` (npm `sha512-NeofJFya…zRrsg==`, about two weeks old when pinned) with `@cloudflare/workerd-linux-64@1.20261023.1` (`sha512-VHQ6jKFS…L1KBnw==`). The binary reports `workerd 2026-10-23`.
+- workerd pins BoringSSL `0.20261020.0` (archive sha256 `218355340f67…d836f4`). `rolldown@1.2.16` bundles the worker.
+- **No container image or digest is selected yet**; this is a release blocker.
+- npm 12 blocked workerd's postinstall script; it isn't needed.
+
+*Native path, verified from source at those tags:*
+- The real option is `supportsRSARAW: true` (`BlindRSAPlatformParams`). With it, `blindSign` calls `crypto.subtle.sign({name: "RSA-RAW"})`. The library's own `m == RSAVP1(s)` fault check runs **only on its JavaScript path**, so the signer adds an independent RSAVP1 check (`services/signer/src/fault-check.ts`).
+- workerd `api/crypto/rsa.c++`: RSA-RAW imports only private keys and runs `validateRsaParams`. `Rsa::sign` accepts inputs no larger than the modulus, checks `m < n` only at equal length, and **does not reject `m = 0`**. It calls BoringSSL `RSA_decrypt(…, RSA_NO_PADDING)`.
+- BoringSSL `rsa_default_decrypt` requires the input to be exactly modulus-size. `rsa_default_private_transform` rejects `m ≥ n`, refuses keys without `e`, uses constant-time CRT/`BN_mod_exp_mont_consttime`, and in all cases verifies `result^e == input` before returning.
+- **No RSA blinding code exists in this BoringSSL revision**; side-channel resistance rests on the constant-time implementation. Treat this as a review finding needing security sign-off before release, not as a pass.
+- A PKCS#8 with a corrupted `dP` was rejected at import (observed `400 invalid_request`).
+
+*Signer contract:* `POST /blind-sign` and `GET /health`, both behind a service bearer credential compared in constant time through SHA-256 digests. The service:
+- serves loopback only (`127.0.0.1` listener observed), with `globalOutbound` set to a network allowing nothing;
+- accepts only an exact canonical JSON body with canonical base64url, a 16 KiB cap enforced on both `Content-Length` and streamed bytes, exactly 384 bytes, `0 < m < n`, and a 3072-bit, e=65537 key;
+- returns fixed generic error bodies, never logs, and fails closed if the credential binding is missing or shorter than 32 characters.
+
+*Tests:*
+- `tests/unit/blind.test.ts` (16): red was 15 "not implemented" failures. The one pass checks only the fixture against OpenSSL. Green: 16/16.
+- `tests/signer/signer.test.ts` (28, real workerd): the signer was **written spike-first, so no red is claimed**. Mutation check: removing the zero check, upper range check, exponent policy, canonical-JSON check, or auth, or switching to the JavaScript signing path, each failed tests. The streamed-body limit initially survived (a `Content-Length` check fired first), so a chunked-body test was added and now kills it. Removing the 3072 check survives, as an equivalent mutant (decoding `n` as exactly 384 bytes already enforces it). Detailed-500-error and no-fault-check mutants are unreachable without fault injection. The fault check is therefore extracted and covered by `tests/unit/signer-fault-check.test.ts` (4; a no-op mutant fails 2).
+- RFC 9474 A.1 was extracted mechanically from the RFC text (sha256 `e6fd49e5…8818b7`) with its algebraic relations checked. It passes in Node (finalize/verify, and an OpenSSL raw private operation reproduces `blind_sig`), in workerd's native path (test-only `tests/signer/vector-worker.ts`, never built for deployment, because the vector key is 4096-bit), and in Chromium 158.0.8127.18 and Firefox 159.0.
+- `tests/browser/blind-interop.spec.ts`: each browser imports the poll JWK, prepares and blinds, then saves and reads back the prepared message and inverse in IndexedDB. The pinned workerd signer signs. After a reload the browser restores, finalizes, and verifies. Node/OpenSSL independently verifies PSS over the restored 111 bytes, and the random prefix is unchanged.
+- Native output equals an OpenSSL raw private operation on the same input. Keys for two polls don't cross-finalize. A 0600 at-rest key file keeps signing for the same published key across a signer restart. The signer log contained none of the ~40 request values sent.
+- *Flakes found and fixed:* both cross-key tests failed when the value blinded mod `n_B` was `≥ n_A`, which the signer correctly refuses. They now re-blind and assert the refusal branch. Afterwards, 8/8 and 20/20 repeated runs passed. `npm run test` (unit 63, signer 28, DB 1, browser 8), `typecheck`, and `build` passed.
+
+*Still open:*
+- container digest and deployed signer topology;
+- service-credential provisioning;
+- encrypted key-at-rest store (the test uses only a 0600 file);
+- an issuer-side `0 < m < n` check before claim consumption (Milestone 3);
+- the harness assumes the `linux-64` workerd binary;
+- security review of the no-blinding/constant-time finding.
 
 **1.3 Two-host browser handoff spike**
 

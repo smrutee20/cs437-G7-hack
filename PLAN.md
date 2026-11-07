@@ -38,7 +38,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 
 | Milestone | Status | Prerequisite | Main outcome |
 | --- | --- | --- | --- |
-| 0. Foundation | not started | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
+| 0. Foundation | in progress (0.1 complete; 0.2–0.3 pending) | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
 | 1. Feasibility | not started | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | not started | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
 | 3. Anonymous issuance | not started | 2 | One durable blind claim per entitlement and reliable browser handoff. |
@@ -58,6 +58,8 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 - Confirm current files and status. Initialize Git without removing or rewriting `SPEC.md` or this plan; add `.gitignore` for secrets, build output, test artifacts, and local certificates. Commit specification and plan as the baseline.
 - Create an npm workspace with the fewest packages necessary for two browser entry points, two API processes, and a private signer proof. Introduce shared protocol/schema code only when the first consuming slice needs it. Pin Node 24 in the repository and commit the npm lockfile.
 - Direct validation: clean checkout/install, `npm run typecheck`, and `npm run build` succeed without secrets or production credentials.
+
+**0.1 observed evidence:** Baseline documents committed as `5bb9a47`, scaffold committed as `1fe436f`. In a fresh temporary clone, `npm ci --no-audit --no-fund`, `npm run typecheck`, and `npm run build` all passed without credentials. Both empty Fastify app factories constructed and closed without starting a listener. The lockfile pins the current skeleton; there are no behavior tests, database, HTTPS origins, private signer, or running APIs yet. Foundation milestone remains **in progress**.
 
 **0.2 Make local infrastructure reproducible**
 

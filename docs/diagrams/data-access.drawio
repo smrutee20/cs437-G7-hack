@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram id="data-access" name="Runtime data access">
+    <mxGraphModel dx="1660" dy="860" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1660" pageHeight="720" background="#111111" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Who can touch which data · runtime database roles" style="text;html=1;align=left;verticalAlign=top;fontSize=22;fontStyle=1;fontColor=#f2f2f2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Each service uses its own database role and connection pool. Ownership is checked on every route and again inside the result functions. Source: SPEC.md §5, §12, §15." style="text;html=1;align=left;verticalAlign=top;fontSize=13;fontColor=#a3a3a3;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="54" width="1580" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- roles -->
+        <mxCell id="role-portal" value="&lt;b&gt;&lt;font style=&quot;font-size: 15px&quot;&gt;Portal API&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#a3a3a3&quot;&gt;organiser routes and sign-in&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Can&lt;/b&gt;&lt;br&gt;• verified users and sessions&lt;br&gt;• its owner's poll configuration&lt;br&gt;• the eligibility list the owner supplied&lt;br&gt;&lt;br&gt;&lt;b&gt;Cannot&lt;/b&gt;&lt;br&gt;• read claim rows or raw responses&lt;br&gt;• reach another organiser's polls&lt;br&gt;• see live counts or claim status" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#14110b;strokeColor=#f0b14a;fontColor=#f3cf8f;fontSize=12;align=left;verticalAlign=top;spacingLeft=16;spacingRight=12;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="110" width="300" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="role-issuer" value="&lt;b&gt;&lt;font style=&quot;font-size: 15px&quot;&gt;Issuer&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#a3a3a3&quot;&gt;separate role and pool in the portal deployment&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Can&lt;/b&gt;&lt;br&gt;• read verified identities and eligibility&lt;br&gt;• run the atomic claim insert&lt;br&gt;• load this poll's private key for the signer&lt;br&gt;&lt;br&gt;&lt;b&gt;Cannot&lt;/b&gt;&lt;br&gt;• read response rows or result snapshots&lt;br&gt;• expose per-account claim status to organisers" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#14110b;strokeColor=#f0b14a;fontColor=#f3cf8f;fontSize=12;align=left;verticalAlign=top;spacingLeft=16;spacingRight=12;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="360" y="110" width="300" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="role-submit" value="&lt;b&gt;&lt;font style=&quot;font-size: 15px&quot;&gt;Public submission&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#a3a3a3&quot;&gt;response API, no sign-in&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Can&lt;/b&gt;&lt;br&gt;• read the public poll, key and question view&lt;br&gt;• call the narrow redemption function, which compares answers inside the database and returns only the outcome&lt;br&gt;&lt;br&gt;&lt;b&gt;Cannot&lt;/b&gt;&lt;br&gt;• read identity tables&lt;br&gt;• read private-key references&lt;br&gt;• read arbitrary responses or snapshots" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#0c1220;strokeColor=#5b8def;fontColor=#b8d0ff;fontSize=12;align=left;verticalAlign=top;spacingLeft=16;spacingRight=12;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="680" y="110" width="300" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="role-results" value="&lt;b&gt;&lt;font style=&quot;font-size: 15px&quot;&gt;Results function&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#a3a3a3&quot;&gt;reviewed, owner-gated database function or job&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Can&lt;/b&gt;&lt;br&gt;• finalize closure under the closure lock&lt;br&gt;• build or read the result snapshot&lt;br&gt;• read answer values, only while building it&lt;br&gt;&lt;br&gt;&lt;b&gt;Cannot&lt;/b&gt;&lt;br&gt;• give the portal SELECT on responses&lt;br&gt;• skip the ownership or threshold checks" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#888888;fontColor=#e6e6e6;fontSize=12;align=left;verticalAlign=top;spacingLeft=16;spacingRight=12;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="110" width="300" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="role-ops" value="&lt;b&gt;&lt;font style=&quot;font-size: 15px&quot;&gt;Background and deployment&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#a3a3a3&quot;&gt;closure job, hourly purge, migrations&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Can&lt;/b&gt;&lt;br&gt;• mark expired polls closed&lt;br&gt;• delete data at each retention boundary&lt;br&gt;• run migrations (deployment-only owner)&lt;br&gt;&lt;br&gt;&lt;b&gt;Cannot&lt;/b&gt;&lt;br&gt;• serve public requests&lt;br&gt;• delete single live claims or nullifiers&lt;br&gt;• run as superuser inside an API" style="rounded=1;arcSize=4;dashed=1;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#888888;fontColor=#e6e6e6;fontSize=12;align=left;verticalAlign=top;spacingLeft=16;spacingRight=12;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="110" width="300" height="250" as="geometry" />
+        </mxCell>
+
+        <!-- stores -->
+        <mxCell id="store-identity" value="&lt;b&gt;identity.*&lt;/b&gt;&lt;br&gt;users (issuer, subject) · sessions&lt;br&gt;oauth_transactions · eligibility&lt;br&gt;claims (poll, user, entry)" style="shape=cylinder3;size=12;boundedLbl=1;whiteSpace=wrap;html=1;fillColor=#1f1a10;strokeColor=#f0b14a;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="400" width="370" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="store-polls" value="&lt;b&gt;polls · signing_keys&lt;/b&gt;&lt;br&gt;configuration, state, frozen schema&lt;br&gt;public keys; public views omit&lt;br&gt;private-key references" style="shape=cylinder3;size=12;boundedLbl=1;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#888888;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="440" y="400" width="370" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="store-anonymous" value="&lt;b&gt;anonymous.*&lt;/b&gt;&lt;br&gt;responses (poll, nullifier, answers)&lt;br&gt;result_snapshots (ready results only)" style="shape=cylinder3;size=12;boundedLbl=1;whiteSpace=wrap;html=1;fillColor=#0f1a2e;strokeColor=#5b8def;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="840" y="400" width="370" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="store-ops" value="&lt;b&gt;operations.purge_tombstones&lt;/b&gt;&lt;br&gt;poll ID and purge date only,&lt;br&gt;kept one year" style="shape=cylinder3;size=12;boundedLbl=1;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#888888;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="400" width="380" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rules" value="&lt;b&gt;Database rules&lt;/b&gt;&lt;br&gt;• Public and default table grants revoked. Every runtime role gets only what is listed above.&lt;br&gt;• SECURITY DEFINER functions (if used): fixed safe search_path, explicit EXECUTE grants, no untrusted dynamic SQL, and every ownership and state check inside the function.&lt;br&gt;• No response timestamps, request IDs or IP columns. Claims and nullifiers are never truncated or reset for a live poll; accounts are never deleted to reset an entitlement." style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#555555;fontColor=#d4d4d4;fontSize=12;align=left;verticalAlign=top;spacingLeft=16;spacingRight=16;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="580" width="1580" height="100" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

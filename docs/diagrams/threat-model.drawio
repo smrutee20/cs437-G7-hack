@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram id="threat-model" name="Threat model">
+    <mxGraphModel dx="1620" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1620" pageHeight="510" background="#111111" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Threat model · what the design does and does not protect" style="text;html=1;align=left;verticalAlign=top;fontSize=22;fontStyle=1;fontColor=#f2f2f2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Risk reduction for low-stakes feedback, not mathematical anonymity. Section numbers refer to SPEC.md." style="text;html=1;align=left;verticalAlign=top;fontSize=13;fontColor=#a3a3a3;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="54" width="1540" height="24" as="geometry" />
+        </mxCell>
+
+        <mxCell id="prevent" value="&lt;b&gt;&lt;font style=&quot;font-size: 16px&quot;&gt;Designed to prevent&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;• A second credential for the same account in the same poll &lt;font color=&quot;#8f8f8f&quot;&gt;§1, §5, §9&lt;/font&gt;&lt;br&gt;• A second response from one credential, or new answers replacing the first &lt;font color=&quot;#8f8f8f&quot;&gt;§1, §10&lt;/font&gt;&lt;br&gt;• Linking a response to an account through the database or logs &lt;font color=&quot;#8f8f8f&quot;&gt;§1, §12, §15&lt;/font&gt;&lt;br&gt;• Organisers seeing live counts, who claimed, or any single response &lt;font color=&quot;#8f8f8f&quot;&gt;§1, §11&lt;/font&gt;&lt;br&gt;• A credential from one poll working in another &lt;font color=&quot;#8f8f8f&quot;&gt;§6, §17&lt;/font&gt;&lt;br&gt;• Portal cookies or sessions reaching the response site &lt;font color=&quot;#8f8f8f&quot;&gt;§6, §14&lt;/font&gt;&lt;br&gt;• Script injection through poll text or answers &lt;font color=&quot;#8f8f8f&quot;&gt;§7, §14&lt;/font&gt;&lt;br&gt;• Editing an open poll, or reopening a closed one &lt;font color=&quot;#8f8f8f&quot;&gt;§4&lt;/font&gt;" style="rounded=1;arcSize=3;whiteSpace=wrap;html=1;fillColor=#0c1220;strokeColor=#5b8def;fontColor=#dbe6ff;fontSize=13;align=left;verticalAlign=top;spacingLeft=18;spacingRight=16;spacingTop=16;" vertex="1" parent="1">
+          <mxGeometry x="40" y="110" width="500" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="reduce" value="&lt;b&gt;&lt;font style=&quot;font-size: 16px&quot;&gt;Reduced, not eliminated&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;• Inference from small categories once a question passes 5 answers &lt;font color=&quot;#8f8f8f&quot;&gt;§1, §11&lt;/font&gt;&lt;br&gt;• Identifying details written into free text (off by default, always optional, warned beside every field) &lt;font color=&quot;#8f8f8f&quot;&gt;§2, §3&lt;/font&gt;&lt;br&gt;• Losing a credential (durable browser storage, warnings, exact retry of a saved submission) &lt;font color=&quot;#8f8f8f&quot;&gt;§8&lt;/font&gt;&lt;br&gt;• Timing correlation (no response timestamps or participant logs; the database's own write log and backups remain) &lt;font color=&quot;#8f8f8f&quot;&gt;§12, §15&lt;/font&gt;&lt;br&gt;• Overload and abuse (rate limits that fail closed, with no IP or device tracking) &lt;font color=&quot;#8f8f8f&quot;&gt;§14&lt;/font&gt;" style="rounded=1;arcSize=3;whiteSpace=wrap;html=1;fillColor=#14110b;strokeColor=#f0b14a;fontColor=#f7e2bb;fontSize=13;align=left;verticalAlign=top;spacingLeft=18;spacingRight=16;spacingTop=16;" vertex="1" parent="1">
+          <mxGeometry x="560" y="110" width="500" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="trusted" value="&lt;b&gt;&lt;font style=&quot;font-size: 16px&quot;&gt;Out of scope, or must be trusted&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;• A dishonest operator or issuer minting extra credentials &lt;font color=&quot;#8f8f8f&quot;&gt;§1&lt;/font&gt;&lt;br&gt;• Operators correlating infrastructure timing or backups &lt;font color=&quot;#8f8f8f&quot;&gt;§15&lt;/font&gt;&lt;br&gt;• One person controlling several institutional accounts &lt;font color=&quot;#8f8f8f&quot;&gt;§1&lt;/font&gt;&lt;br&gt;• Sharing or selling a credential; it is a bearer token &lt;font color=&quot;#8f8f8f&quot;&gt;§2, §3&lt;/font&gt;&lt;br&gt;• Network observers and compromised browsers or devices &lt;font color=&quot;#8f8f8f&quot;&gt;§2&lt;/font&gt;&lt;br&gt;• Repeated or overlapping polls combined with outside knowledge &lt;font color=&quot;#8f8f8f&quot;&gt;§2&lt;/font&gt;&lt;br&gt;• Coercion, binding elections and public verification &lt;font color=&quot;#8f8f8f&quot;&gt;§1, §2&lt;/font&gt;&lt;br&gt;• Availability against a distributed attack &lt;font color=&quot;#8f8f8f&quot;&gt;§14&lt;/font&gt;" style="rounded=1;arcSize=3;whiteSpace=wrap;html=1;fillColor=#1a1010;strokeColor=#ef5350;fontColor=#f8d0cf;fontSize=13;align=left;verticalAlign=top;spacingLeft=18;spacingRight=16;spacingTop=16;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="110" width="500" height="250" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gate" value="&lt;b&gt;Release gate&lt;/b&gt;: real participants only after every SPEC.md §18 gate passes (institutional OAuth, native signing, two HTTPS hostnames, logging-compliant hosting, recovery drill). Until then this is a clearly labelled local demo with synthetic accounts, and no anonymity or eligibility claim rests on an unverified deployment assumption." style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#555555;fontColor=#d4d4d4;fontSize=13;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=18;" vertex="1" parent="1">
+          <mxGeometry x="40" y="390" width="1540" height="80" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

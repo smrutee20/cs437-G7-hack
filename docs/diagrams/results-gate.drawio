@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram id="results-gate" name="Results publication gate">
+    <mxGraphModel dx="980" dy="1760" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="980" pageHeight="1760" background="#111111" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Results publication gate" style="text;html=1;align=left;verticalAlign=top;fontSize=22;fontStyle=1;fontColor=#f2f2f2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Owner only, after closing, computed on the server from the final response set. Thresholds are fixed policy with no override. Source: SPEC.md §11, §13." style="text;html=1;align=left;verticalAlign=top;fontSize=13;fontColor=#a3a3a3;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="54" width="900" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- main column -->
+        <mxCell id="n-start" value="Owner asks for results" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#f2f2f2;fontColor=#f2f2f2;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="110" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d-owner" value="Owner of&lt;br&gt;this poll?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#d4d4d4;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="240" y="220" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="d-closed" value="Effectively&lt;br&gt;closed?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#d4d4d4;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="240" y="370" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p-lock" value="Take the closure lock and materialize closure. Waits for admitted claims and inserts to finish." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#888888;fontColor=#e6e6e6;fontSize=12;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="210" y="520" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="d-withdrawn" value="Withdrawn?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#d4d4d4;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="240" y="650" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="d-five" value="≥ 5 accepted&lt;br&gt;responses?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#d4d4d4;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="240" y="800" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="d-snapshot" value="Snapshot&lt;br&gt;already stored?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#d4d4d4;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="240" y="950" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p-each" value="For each question, in schema order" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#888888;fontColor=#e6e6e6;fontSize=12;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="210" y="1100" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d-answers" value="≥ 5 non-empty&lt;br&gt;answers?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#d4d4d4;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="240" y="1210" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p-publish" value="&lt;b&gt;Publish the question&lt;/b&gt;&lt;br&gt;choice: count and % of answered (1 dp), zeros included&lt;br&gt;rating: 1–5 distribution and mean (2 dp)&lt;br&gt;free text: shuffled on its own, no authors or times" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#0f1a2e;strokeColor=#5b8def;fontColor=#f2f2f2;fontSize=12;align=left;spacingLeft=14;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="180" y="1360" width="360" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p-store" value="&lt;b&gt;Store the immutable snapshot&lt;/b&gt;&lt;br&gt;return the ready result with totalResponses" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#0f1a2e;strokeColor=#5b8def;strokeWidth=2;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="210" y="1520" width="300" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- outcomes -->
+        <mxCell id="o-404" value="&lt;b&gt;404 not_found&lt;/b&gt;&lt;br&gt;same answer as an unknown poll" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#1a1010;strokeColor=#ef5350;strokeWidth=2;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="240" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="o-notclosed" value="&lt;b&gt;409 results_not_closed&lt;/b&gt;&lt;br&gt;no count, text, aggregate or progress" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#1a1010;strokeColor=#ef5350;strokeWidth=2;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="390" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="o-withdrawn" value="&lt;b&gt;410 poll_withdrawn&lt;/b&gt;&lt;br&gt;no results, ever" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#1a1010;strokeColor=#ef5350;strokeWidth=2;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="670" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="o-withheld" value="&lt;b&gt;withheld: insufficient_responses&lt;/b&gt;&lt;br&gt;Permanent. The exact count is not shown." style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#1f1a10;strokeColor=#f0b14a;strokeWidth=2;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="815" width="320" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="o-same" value="&lt;b&gt;Return the same snapshot&lt;/b&gt;&lt;br&gt;results never change after they are built" style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#0f1a2e;strokeColor=#5b8def;strokeWidth=2;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="970" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="o-qwithheld" value="&lt;b&gt;Question withheld: insufficient_answers&lt;/b&gt;&lt;br&gt;No counts, mean or texts for it." style="rounded=1;arcSize=20;whiteSpace=wrap;html=1;fillColor=#1f1a10;strokeColor=#f0b14a;fontColor=#f2f2f2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="1225" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="never" value="&lt;b&gt;Never&lt;/b&gt;: live or partial results, force-publish, lower thresholds, filters, cross-tabs, exports or single responses. Once a question passes 5 answers its exact counts are shown, so small categories can still allow inference." style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#555555;fontColor=#d4d4d4;fontSize=12;align=left;verticalAlign=middle;spacingLeft=16;spacingRight=16;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1640" width="900" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- main flow -->
+        <mxCell id="f1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;strokeColor=#d4d4d4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n-start" target="d-owner">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f2" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#d4d4d4;fontColor=#e6e6e6;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-owner" target="d-closed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f3" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#d4d4d4;fontColor=#e6e6e6;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-closed" target="p-lock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;strokeColor=#d4d4d4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p-lock" target="d-withdrawn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f5" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#d4d4d4;fontColor=#e6e6e6;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-withdrawn" target="d-five">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f6" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#d4d4d4;fontColor=#e6e6e6;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-five" target="d-snapshot">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f7" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#d4d4d4;fontColor=#e6e6e6;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-snapshot" target="p-each">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;strokeColor=#d4d4d4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p-each" target="d-answers">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f9" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#5b8def;fontColor=#b8d0ff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-answers" target="p-publish">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;strokeColor=#5b8def;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p-publish" target="p-store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- branches to outcomes -->
+        <mxCell id="b1" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#ef5350;fontColor=#f4a3a1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-owner" target="o-404">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b2" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#ef5350;fontColor=#f4a3a1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-closed" target="o-notclosed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b3" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#ef5350;fontColor=#f4a3a1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-withdrawn" target="o-withdrawn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b4" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#f0b14a;fontColor=#f3cf8f;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-five" target="o-withheld">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b5" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#5b8def;fontColor=#b8d0ff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-snapshot" target="o-same">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b6" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;fontSize=11;labelBackgroundColor=#111111;strokeColor=#f0b14a;fontColor=#f3cf8f;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="d-answers" target="o-qwithheld">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b7" value="kept in the snapshot&lt;br&gt;as withheld" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;dashed=1;fontSize=11;labelBackgroundColor=#111111;strokeColor=#f0b14a;fontColor=#f3cf8f;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="o-qwithheld" target="p-store">
+          <mxGeometry x="0.45" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="780" y="1555" />
+            </Array>
+            <mxPoint x="0" y="-22" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

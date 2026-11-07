@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram id="who-sees-what" name="Who sees what">
+    <mxGraphModel dx="1580" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1580" pageHeight="980" background="#111111" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Who can see what · the privacy model in plain language" style="text;html=1;align=left;verticalAlign=top;fontSize=22;fontStyle=1;fontColor=#f2f2f2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="For participants and organisers. Low-stakes course, mess and club feedback; not an election system. Based on SPEC.md §1–§3, §8 and §11." style="text;html=1;align=left;verticalAlign=top;fontSize=13;fontColor=#a3a3a3;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="54" width="1500" height="24" as="geometry" />
+        </mxCell>
+
+        <!-- Analogy strip -->
+        <mxCell id="step-seal" value="&lt;b&gt;1 · Seal&lt;/b&gt;&lt;br&gt;Your browser writes a random card and seals it in a carbon-lined envelope.&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#8f8f8f&quot;&gt;crypto: blind the message&lt;/font&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#f2f2f2;fontColor=#f2f2f2;fontSize=13;align=left;verticalAlign=top;spacingLeft=14;spacingRight=12;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="110" width="345" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="step-stamp" value="&lt;b&gt;2 · Stamp&lt;/b&gt;&lt;br&gt;The portal checks your institutional account and stamps the outside of the envelope. It cannot see the card.&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#8f8f8f&quot;&gt;crypto: blind signature, one per account per poll&lt;/font&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#1f1a10;strokeColor=#f0b14a;fontColor=#f2f2f2;fontSize=13;align=left;verticalAlign=top;spacingLeft=14;spacingRight=12;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="425" y="110" width="345" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="step-open" value="&lt;b&gt;3 · Open&lt;/b&gt;&lt;br&gt;Back in your browser, the stamp has come through onto the card. Nobody else has ever seen this card.&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#8f8f8f&quot;&gt;crypto: unblind and verify&lt;/font&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#1c1c1c;strokeColor=#f2f2f2;fontColor=#f2f2f2;fontSize=13;align=left;verticalAlign=top;spacingLeft=14;spacingRight=12;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="810" y="110" width="345" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="step-use" value="&lt;b&gt;4 · Use once&lt;/b&gt;&lt;br&gt;You hand in the card with your answers. The response service checks the stamp and keeps the card's fingerprint so it works only once.&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#8f8f8f&quot;&gt;crypto: verify signature, store nullifier&lt;/font&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#0f1a2e;strokeColor=#5b8def;fontColor=#f2f2f2;fontSize=13;align=left;verticalAlign=top;spacingLeft=14;spacingRight=12;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="1195" y="110" width="345" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="a1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;strokeColor=#bbbbbb;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="step-seal" target="step-stamp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;strokeColor=#bbbbbb;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="step-stamp" target="step-open">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;strokeWidth=1.5;strokeColor=#bbbbbb;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="step-open" target="step-use">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Who knows what -->
+        <mxCell id="col-portal" value="&lt;b&gt;&lt;font style=&quot;font-size: 16px&quot;&gt;The portal (identity side) knows&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;✓&amp;nbsp; your institutional account, verified by Google&lt;br&gt;✓&amp;nbsp; whether your email is on this poll's list&lt;br&gt;✓&amp;nbsp; that you claimed a credential for this poll&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; your secret card, or the stamp on it&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; your answers&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; whether you went on to submit" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#14110b;strokeColor=#f0b14a;fontColor=#f3cf8f;fontSize=13;align=left;verticalAlign=top;spacingLeft=18;spacingRight=14;spacingTop=16;" vertex="1" parent="1">
+          <mxGeometry x="40" y="310" width="480" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="col-browser" value="&lt;b&gt;&lt;font style=&quot;font-size: 16px&quot;&gt;Your browser holds&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;•&amp;nbsp; the secret card and its stamp, until you submit&lt;br&gt;•&amp;nbsp; your draft answers&lt;br&gt;&lt;br&gt;Nothing secret goes in links, cookies or the clipboard. After a confirmed submission it is all erased.&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#f3cf8f&quot;&gt;If this browser loses the card after you claim, it cannot be replaced for this poll.&lt;/font&gt;" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#f2f2f2;fontColor=#e6e6e6;fontSize=13;align=left;verticalAlign=top;spacingLeft=18;spacingRight=14;spacingTop=16;" vertex="1" parent="1">
+          <mxGeometry x="555" y="310" width="480" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="col-respond" value="&lt;b&gt;&lt;font style=&quot;font-size: 16px&quot;&gt;The response service (anonymous side) knows&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;✓&amp;nbsp; that a validly stamped card was used for this poll&lt;br&gt;✓&amp;nbsp; your answers&lt;br&gt;✓&amp;nbsp; a one-way fingerprint of the card, so it works once&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; your account, email or name&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; which claim the card came from&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; your IP address, cookies or browser details&lt;br&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp;(stripped at the edge, never logged)" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#0c1220;strokeColor=#5b8def;fontColor=#b8d0ff;fontSize=13;align=left;verticalAlign=top;spacingLeft=18;spacingRight=14;spacingTop=16;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="310" width="470" height="230" as="geometry" />
+        </mxCell>
+
+        <mxCell id="no-link" value="No database row links your account to your answers. The only value both sides share is the poll ID." style="rounded=1;arcSize=20;dashed=1;whiteSpace=wrap;html=1;fillColor=#1a1010;strokeColor=#ef5350;fontColor=#f4a3a1;fontSize=14;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="570" width="1500" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Organiser -->
+        <mxCell id="organiser" value="&lt;b&gt;&lt;font style=&quot;font-size: 16px&quot;&gt;The organiser sees, only after the poll closes&lt;/font&gt;&lt;/b&gt;" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#161616;strokeColor=#888888;fontColor=#f2f2f2;fontSize=13;align=left;verticalAlign=top;spacingLeft=18;spacingTop=16;container=1;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="650" width="1500" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="organiser-yes" value="✓&amp;nbsp; counts, percentages and averages for each question&lt;br&gt;✓&amp;nbsp; free-text answers, shuffled, with no names or times&lt;br&gt;✓&amp;nbsp; the total number of responses" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=13;fontColor=#e6e6e6;" vertex="1" parent="organiser">
+          <mxGeometry x="18" y="56" width="680" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="organiser-no" value="&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; anything while the poll is open: no live counts&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; any results if fewer than 5 people respond (permanent)&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; a question's results if fewer than 5 people answered it&lt;br&gt;&lt;font color=&quot;#f4a3a1&quot;&gt;✗&lt;/font&gt;&amp;nbsp; who claimed, who responded, or any single response" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=13;fontColor=#e6e6e6;" vertex="1" parent="organiser">
+          <mxGeometry x="740" y="56" width="740" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Limits -->
+        <mxCell id="limits" value="&lt;b&gt;What you still have to trust&lt;/b&gt;&lt;br&gt;The platform operator and its infrastructure are trusted: they could issue extra credentials or correlate network timing. Free text, small groups, unanimous answers and outside knowledge can still reveal you. A credential can be lost or shared. This is not an election system or a guarantee of absolute anonymity." style="rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#1f1a10;strokeColor=#f0b14a;fontColor=#f3cf8f;fontSize=13;align=left;verticalAlign=top;spacingLeft=18;spacingRight=18;spacingTop=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="840" width="1500" height="90" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

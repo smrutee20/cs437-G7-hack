@@ -1,0 +1,16 @@
+{
+  "name": "@iitgn-feedback/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/credential.d.ts",
+      "default": "./dist/credential.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "build": "tsc --project tsconfig.json"
+  }
+}

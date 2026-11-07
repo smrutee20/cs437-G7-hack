@@ -1,0 +1,189 @@
+# Implementation plan — IITGN Anonymous Feedback & Polls
+
+Status: proposed execution plan for [`SPEC.md`](SPEC.md), v1.0. This is a plan, not evidence that a milestone has passed. The specification controls if the two documents differ; reconcile discrepancies before coding against either one.
+
+## 1. Planning and working rules
+
+### Goal and order
+
+Deliver a **local synthetic-account demo** first, then permit a real-participant release only after the institutional, cryptographic, browser, infrastructure, and operational gates in `SPEC.md` pass. No real participants or claims of verified anonymity before those gates. Do not replace the blind-credential design to meet a deadline.
+
+Work in dependency order. Milestone 0 establishes a working runner; Milestone 1 establishes that the riskiest design can work. Thereafter, each milestone has an observable vertical outcome, a leading acceptance scenario, and an exit gate. Do not implement later milestone behavior merely to make an earlier demo look complete.
+
+### TDD cycle for each behavioral slice
+
+1. Read the relevant `SPEC.md` sections and define the **external behavior** plus one or two important failure cases. Choose the cheapest sufficient test level: unit for pure encodings/validation; real-Postgres integration for constraints, locks, API, and privileges; real-browser E2E for origins, cookies, storage, popup handoff, and CSP.
+2. Add a focused test whose expected result is derived independently from the implementation. State what should fail before running it. **Run it and inspect the failure**: missing behavior is valid red; missing tooling, syntax, setup, flakiness, or an unrelated failure is not. Repair the runner before proceeding.
+3. Make the smallest coherent production change; rerun the focused test until green. Then run nearby and broader tests appropriate to the blast radius. Refactor while green and rerun affected checks.
+4. Record the focused red reason, focused green command/result, broader check result, and any residual risk in the milestone notes or pull request. A passing-first test is investigated, not presented as a red. Preserve pre-existing work; never reset or hide it to manufacture a TDD history.
+5. Stop a slice only when the user-facing/API/DB contract and its important failure path are demonstrated. Add tests for plausible regressions, not for a coverage number, private method call order, or static repository layout.
+
+Setup, CI configuration, dependency installation, and external feasibility checks need **direct validation**, not contrived permanent failing tests. A reusable protocol fixture or browser contract can still be developed test-first once its runner is working. Avoid writing all 27 acceptance tests before the relevant implementation slice; keep a traceability map and add focused tests just before each change.
+
+### Planned evidence commands
+
+Establish these root scripts in Milestone 0; they are **planned interfaces, not commands currently available**:
+
+- `npm run typecheck` and `npm run build` for static/build validation.
+- `npm run test:unit` for pure protocol, schema, and result-policy behavior.
+- `npm run test:db` for API/database behavior against a real disposable PostgreSQL 17 instance.
+- `npm run test:browser` for Playwright tests in supported desktop Chromium and Firefox against two local HTTPS hostnames.
+- `npm run test` for the local aggregate, with distinct CI jobs for unit, DB, and browser evidence.
+
+Use pinned npm dependencies and a committed lockfile. Select Vitest for TypeScript unit/integration tests and Playwright for browser tests; choose test utilities only when the first real scenario needs them. DB tests must manage isolated fixtures, roll back or recreate state deterministically, and never use production accounts or data. CI and local setup must exercise the same scripts. Test clocks and randomness at their boundaries rather than relying on sleeps or exact wall-clock timing.
+
+### Milestone tracker
+
+Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fails. Mark `complete` only after its exit evidence is recorded; a passing unit test alone does not clear a DB/browser/security gate. Record implementation PR/commit links and exact commands/results when work begins. Nothing in this table implies tests have run.
+
+| Milestone | Status | Prerequisite | Main outcome |
+| --- | --- | --- | --- |
+| 0. Foundation | not started | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
+| 1. Feasibility | not started | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
+| 2. Poll foundation | not started | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
+| 3. Anonymous issuance | not started | 2 | One durable blind claim per entitlement and reliable browser handoff. |
+| 4. Anonymous redemption | not started | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
+| 5. Results | not started | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
+| 6. Production boundaries | not started | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
+| 7. Demo and release review | not started | 6 for real release; 5 for synthetic demo | Complete walkthrough and independently checked acceptance evidence. |
+
+## 2. Milestone 0 — Foundation (detailed)
+
+**Purpose:** Establish tools that let subsequent tests fail for missing behavior, not for missing infrastructure. Initial inventory: this directory contains `SPEC.md` and this plan only; it is not yet a Git repository. Node 24, npm, and Docker are present. `psql`, `mkcert`, and `workerd` were not found on the current PATH. This is an inventory, not a successful dependency/setup check.
+
+### Work packages
+
+**0.1 Preserve and version the starting point**
+
+- Confirm current files and status. Initialize Git without removing or rewriting `SPEC.md` or this plan; add `.gitignore` for secrets, build output, test artifacts, and local certificates. Commit specification and plan as the baseline.
+- Create an npm workspace with the fewest packages necessary for two browser entry points, two API processes, and a private signer proof. Introduce shared protocol/schema code only when the first consuming slice needs it. Pin Node 24 in the repository and commit the npm lockfile.
+- Direct validation: clean checkout/install, `npm run typecheck`, and `npm run build` succeed without secrets or production credentials.
+
+**0.2 Make local infrastructure reproducible**
+
+- Supply a disposable PostgreSQL 17 service through Docker Compose with durable-mode settings for integration tests. No in-memory DB substitute for concurrency tests. Separate local test credentials/roles from application credentials.
+- Configure `portal.feedback.test` and `respond.feedback.test` to loopback with trusted **HTTPS** certificates and same-origin API paths. Document host mapping and trust steps; no same-host/different-port shortcut. Keep local secrets and certificates untracked.
+- Direct validation: both hostnames resolve and serve independently over HTTPS; DB connectivity, migration up/down, test DB reset, and clean shutdown work. A same-host/different-port misconfiguration is rejected.
+
+**0.3 Prove the runner itself works**
+
+- Add the Vitest and Playwright runners and root scripts listed above; include one tiny runner smoke check per runner, then replace setup-only smoke checks with meaningful contract tests once available. Configure CI jobs to install, start disposable services, run, and tear down.
+- Direct validation: a deliberately failing temporary check is reported as failure, restored to green without erasing existing work; targeted and aggregate commands propagate nonzero exit status. Missing database/browser prerequisites are clear setup errors, never counted as TDD red.
+
+### Exit gate
+
+A fresh local checkout can install, build, run unit/DB/browser runners against two HTTPS hostnames, and reset test data. Document the exact observed commands and any browser/environment caveats. **Do not** claim a privacy or credential guarantee from runner smoke tests.
+
+## 3. Milestone 1 — Feasibility and boundary proof (detailed)
+
+**Purpose:** Remove the principal architectural risks before building poll features. It is acceptable for an external institutional OAuth or hosting check to remain a **real-participant release blocker** while synthetic local development continues; it is not acceptable for the blind-signature/native-signer or two-origin protocol to remain hypothetical before Milestone 2.
+
+### Work packages and checks
+
+**1.1 Exact byte-level protocol**
+
+- First behavior test: independently compute the application message and nullifier in `SPEC.md` §7 and assert the published fixtures/lengths. Expected initial red: the protocol encoding function does not exist. Do not compute expected bytes by calling the function under test.
+- Implement canonical UUID/base64url parsing, version/tag/poll/key checks, prepared-message handling, and nullifier computation. Add wrong-version/length/encoding cases. Run focused unit tests, then `test:unit`, typecheck, and build.
+
+**1.2 Browser/client and native signer spike**
+
+- Pin `@cloudflare/blindrsa-ts@0.4.6`; stand up the isolated native `RSA-RAW` signer with the runtime/option specified by `SPEC.md`. Do not fall back to the package's JavaScript private-signing path or a custom RSA implementation.
+- Use RFC 9474 suite vectors as independent assertions. Exercise prepare → blind → private native sign → finalize → verify in Node and in supported browsers, including a persisted 111-byte prepared message. Check signer input/range rejection, private-operation protections/fault check, key creation/storage/restart, and two independent poll keys. Avoid recording key material or blind requests in output.
+- Capture the selected `workerd` release/container digest, real native option spelling, library pin/integrity, test commands, browser versions, and a short review of the actual private operation. A package README or a green mock test is not proof of native signing.
+
+**1.3 Two-host browser handoff spike**
+
+- With synthetic public data and no real claim endpoint, test fixed-origin `postMessage` readiness/nonce/source checks, popup behavior under browser user gestures, correct `WindowProxy`/COOP behavior, IndexedDB + Web Locks availability, and rejection of forged-origin/source messages. Test portal host-only cookie exclusion from response document/asset/API requests.
+- First browser behavior test should fail for an unimplemented handoff/host boundary, not a TLS or browser-install error. Test popup-blocked, direct-visit, reload, and unsupported-browser paths. Discard spike UI that serves no contract; retain useful browser tests and infrastructure.
+
+**1.4 External feasibility inventory (direct checks, not synthetic TDD red)**
+
+- Confirm whether the institution can authorize the OAuth client and whether real signed `email`/`hd` claims meet `SPEC.md` §5. Do not print or commit real tokens or personal data. If accounts/permission are unavailable, mark only the **real-login/release gate** blocked and use synthetic demo identities.
+- Confirm that proposed production hosting provides two approved HTTPS hostnames, private signer isolation, durable PostgreSQL/key storage, and configurable edge/CDN/WAF/error logs. Write down what has actually been verified versus assumed. If logs cannot be disabled as required, real deployment is blocked.
+
+### Stop/go decision
+
+- **Go to Milestone 2:** native signer + browser verifier pass vectors and an end-to-end blind signature round trip; two-host bridge and cookie boundary are demonstrated; test environment is reproducible. Real IITGN login/hosting may remain explicitly marked as release prerequisites.
+- **Stop and revise `SPEC.md` before coding more:** selected crypto/runtime cannot meet the native-signing/interop/security contract, or two approved origin boundaries cannot be made to work. Never silently substitute a shared signing key, ordinary bearer token, IP-tracked rate limit, or same-host ports.
+
+### Exit evidence
+
+Save concise test output, browser network/cookie observations, dependency/runtime pins, signer-path inspection notes, and a release-blocker checklist. No participant data, private keys, credential messages, or authentication tokens in that evidence.
+
+## 4. Later milestones — scoped outcomes and exit gates
+
+These are commitments, **not** a line-by-line task backlog yet. Before each milestone, turn its next observable outcome into a small sequence of red/green/refactor slices and update the tracker.
+
+### Milestone 2 — Poll foundation
+
+- Build synthetic demo authentication with stable account subjects in a separate development-only artifact. Implement organiser provisioning, owner-only routes, draft creation/update/preview/import, validations, per-poll key provisioning, poll listing/public DTOs, revision checks, opening freeze, deadline/manual closure, and DB role boundaries that these routes need.
+- Leading tests: invalid/duplicate eligibility is rejected without partial import; organiser A cannot access organiser B's poll; draft is not public; a frozen open poll cannot be edited; an expired poll closes without waiting for the scheduler. Use real DB/API integration for transaction and permission behavior; unit tests for pure input normalization.
+- Exit: an organiser can create, edit, preview, open, and close a poll through documented APIs; public metadata reveals neither allowlist nor claim/response counts; draft/open/close races and forbidden role reads are tested. No claim or response is fabricated for the demo.
+
+### Milestone 3 — Anonymous issuance
+
+- Add the response-origin credential state machine and portal bridge from Milestone 1, authenticated claim API, stable-account/email-entry uniqueness, durable claim-before-sign ordering, private signer access, error/uncertainty UX, and per-poll key binding.
+- Leading tests: one account or eligibility entry cannot obtain two signatures under concurrent claims; a blinded message for B signed through A does not verify with B's public key (full redemption check follows in Milestone 4); crash before/after commit never releases a signature early; losing the bridge result never triggers a second claim.
+- Exit: with synthetic identities, one eligible account can obtain and locally verify one poll-bound credential; unsupported storage/browser and uncertain issuance fail closed. Claim rows contain no credential material.
+
+### Milestone 4 — Anonymous redemption
+
+- Add frozen-schema answer validation/canonicalization, public verifier, nullifier insertion with real DB locking/uniqueness, idempotent identical retry, changed-answer conflict, closure/advisory-lock ordering, and browser pending/cleanup behavior.
+- Leading tests: one valid credential creates exactly one row despite parallel submissions; an identical retry after lost acknowledgment and normal closure confirms acceptance; changed answers cannot replace it; close/deadline versus in-flight requests cannot admit a late first response.
+- Exit: the minimal synthetic-account **vertical slice** works across both hostnames, including duplicate, invalid, expired, and retry paths. Response schema and logs contain no respondent-level identity linkage.
+
+### Milestone 5 — Gated results
+
+- Add serialized final closure and snapshot creation, organiser-only access, poll/question thresholds, fixed result DTOs, structured aggregation, independent persistent free-text shuffling, safe text rendering, and warnings. No response-row export or live results.
+- Leading tests: four responses permanently withhold results; five responses do not publish a question with four answers; ready results contain only allowed aggregates/texts; result publication waits for admitted in-flight commits.
+- Exit: owner sees results only after closure and thresholds; the actual JSON cannot reconstruct cross-question response profiles from row ordering/IDs; malicious content remains inert in browser tests.
+
+### Milestone 6 — Production boundaries and operations
+
+- Implement/test real Google OIDC (only with authorized institutional accounts), session/CSRF flow, runtime DB privileges, request bounds, strict deployment headers, logging controls, scheduled retention, key destruction, purge/withdrawal journal, backup restore fail-closed policy, and operator withdrawal. Do not bypass external access/hosting requirements for a passing test.
+- Leading tests: right email suffix without signed institutional `hd` fails; all organiser mutations require correct identity/CSRF; forbidden roles cannot read raw response/identity tables; restored open polls cannot resume; withdrawn/expired data cannot reappear from backup; error paths do not log participant data.
+- Exit: security/operations acceptance tests pass with production-like infrastructure **and** the real-participant release checklist has documented evidence or explicitly remains blocked. Synthetic demo can still ship separately if external approvals are unavailable.
+
+### Milestone 7 — Walkthrough and release review
+
+- Run the ten-eligible/five-response demo and four-response withheld demo from `SPEC.md` §17; verify in both supported browsers and review all 27 scenario records, performance limits, recovery drills, network/log captures, and actual API payloads.
+- Exit for **synthetic demo:** reproducible clean-run walkthrough and acceptance evidence for local behavior, with real-OAuth/hosting gaps labelled clearly.
+- Exit for **real participants:** all `SPEC.md` §18 release gates independently passed; no open blocker hidden by a demo mock or a green unit test.
+
+## 5. Acceptance-scenario ownership
+
+The numbers below refer to `SPEC.md` §17. A row assigns the **primary milestone that must demonstrate the scenario**, not permission to defer foundational protections; where useful, earlier work is noted. Record observed test names/commands alongside these entries as they are implemented.
+
+| Scenario | Primary milestone | Required evidence |
+| --- | --- | --- |
+| 1 | 6 | Real OIDC signature/claim/nonce/domain failures and successful institutional login. |
+| 2 | 3 | Stable subject and both account/email-entry claim constraints; session behavior from 6. |
+| 3 | 2 | Organiser ownership and role checks, revisited under production OIDC in 6. |
+| 4 | 6 | Real session/CSRF/origin tests and production demo-auth exclusion. |
+| 5 | 1 | RFC suite/encoding vectors, native signing, browser/server interoperation. |
+| 6 | 4 | Distinct keys and attempted hidden cross-poll issuance/redeem; key-isolation proof begins in 3. |
+| 7 | 4 | Malformed credentials/messages/answers cannot create a response. |
+| 8 | 3 | Concurrent claim and crash-window database/signer tests. |
+| 9 | 3 | Draft/closed/expired/withdrawn issuance rejection and key restart behavior. |
+| 10 | 4 | Parallel identical/different-answer redemption and nullifier uniqueness. |
+| 11 | 4 | Server answer validation, normalization, and idempotency. |
+| 12 | 4 | Lost-acknowledgment and deadline-crossing retry semantics. |
+| 13 | 4 | Real DB claim/submit/close race; results finalization completed and rechecked in 5. |
+| 14 | 2 | Draft revision/freeze and open/edit race with DB roles. |
+| 15 | 1 | Real-browser cookie and hostname isolation captures. |
+| 16 | 3 | Full bridge/store failure modes; basic handoff proof begins in 1. |
+| 17 | 4 | Browser prepared/usable/pending/terminal cleanup and no-secret transport checks. |
+| 18 | 5 | Malicious organiser/answer content, CSP, opener, and rendering checks; safe rendering starts in 2. |
+| 19 | 6 | Persistence and real ingress/app/native signer/error log review; enforce safe defaults from 1 onward. |
+| 20 | 6 | Full runtime role/function privilege checks; establish foundational DB roles in 2. |
+| 21 | 5 | Poll/question threshold boundaries and withheld DTOs. |
+| 22 | 5 | Aggregation, skipped answers, stable independent text order, actual JSON shape. |
+| 23 | 5 | Immutable policy, withheld permanence, export/filter denial, withdrawal snapshot gating; operations in 6. |
+| 24 | 6 | Overload, limiter privacy, and timeouts. |
+| 25 | 6 | Retention, browser expiry, deletion, and backup schedule. |
+| 26 | 6 | Backup rollback/withdrawal journal/key-loss drills. |
+| 27 | 7 | Full synthetic walkthrough and below-threshold example. |
+
+## 6. First execution decision
+
+Begin with **Milestone 0.1**: preserve the two documents, initialize version control, and establish the minimal npm workspace. Do not generate a full application or add an extensive test suite before the runner and Phase 0 feasibility checks work. After Milestone 0 passes, the first behavior-driven red should be the independent credential-byte fixture in Milestone 1.1; the next major stop/go decision is the native blind-signing/browser interoperability proof.

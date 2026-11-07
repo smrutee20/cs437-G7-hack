@@ -38,8 +38,8 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 
 | Milestone | Status | Prerequisite | Main outcome |
 | --- | --- | --- | --- |
-| 0. Foundation | in progress (0.1 complete; 0.2–0.3 pending) | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
-| 1. Feasibility | not started | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
+| 0. Foundation | complete (with recorded caveats) | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
+| 1. Feasibility | in progress (1.1 complete) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | not started | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
 | 3. Anonymous issuance | not started | 2 | One durable blind claim per entitlement and reliable browser handoff. |
 | 4. Anonymous redemption | not started | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
@@ -72,6 +72,21 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 - Add the Vitest and Playwright runners and root scripts listed above; include one tiny runner smoke check per runner, then replace setup-only smoke checks with meaningful contract tests once available. Configure CI jobs to install, start disposable services, run, and tear down.
 - Direct validation: a deliberately failing temporary check is reported as failure, restored to green without erasing existing work; targeted and aggregate commands propagate nonzero exit status. Missing database/browser prerequisites are clear setup errors, never counted as TDD red.
 
+**0.2/0.3 observed evidence** (commit `946144f`, branch `foundation-feasibility`):
+
+- Origin preflight (`packages/config/src/origins.ts`, `tests/unit/origins.test.ts`): focused red was 11 assertion failures, "expected [Function] to throw", against a pass-through stub. Two cases passed first: the accepting case (by construction) and the empty value (`new URL("")` already throws). Green: 13/13. Vite and Playwright both read origins through the preflight. With `FEEDBACK_RESPOND_ORIGIN=https://portal.feedback.test:4174`, both `npm run test:browser` and `npm run dev -w @iitgn-feedback/respond` exit 1 with "must use distinct hostnames" before any server starts.
+- HTTPS: Playwright's `tls` setup project uses Node `https` with `ca: .certs/dev-ca.crt` and default hostname verification. Each hostname returned 200 with distinct app HTML; `unlisted.feedback.test` was rejected for a certificate-name mismatch. The Chromium/Firefox cookie test (portal `__Host-` cookie absent from response-host requests; Web Crypto, IndexedDB, and Web Locks present) depends on that project.
+- DB: `tests/db/global-setup.ts` creates `feedback_test_<time>_<rand>` per run and drops it `WITH (FORCE)`. After runs, `pg_database` held 0 such databases. The test asserts PG 17.x, `fsync=on`, `synchronous_commit=on`, and zero user tables. An unreachable port and a non-loopback URL each stop with `SETUP ERROR`. `scripts/check-local-db.sh` printed its PASS line.
+- Fresh clone of `da5276b` into a scratch directory: `npm ci`, `scripts/create-dev-certs.sh`, `npm run typecheck`, `npm run build`, and `npm run test` all exited 0. Temporary failing tests in each suite made both the targeted script and `npm run test` exit 1. After deleting them, `npm run test` exited 0 and `git status` was clean.
+- Tool versions observed: Node 24.19.0, npm 12.2.0, Vitest 5.1.0, Playwright 1.65.0 (Chromium build 1254, Firefox build 1572), and `postgres:17@sha256:ff87…b4f`.
+
+**Caveats carried forward:**
+
+1. `.github/workflows/ci.yml` is **written but never executed**: there is no git remote.
+2. Browsers ignore certificate errors for the local CA. Strict trust is proven only by the Node-side `tls` check.
+3. `/etc/hosts` is not modified (sudo). Automated tests map hostnames inside the browser; interactive steps are in `README.md`.
+4. Drizzle migration up/down and separate application DB roles are deferred to the first schema slice in Milestone 2. The only role today is the Compose superuser, and tests use it only to create and drop the disposable database.
+
 ### Exit gate
 
 A fresh local checkout can install, build, run unit/DB/browser runners against two HTTPS hostnames, and reset test data. Document the exact observed commands and any browser/environment caveats. **Do not** claim a privacy or credential guarantee from runner smoke tests.
@@ -86,6 +101,8 @@ A fresh local checkout can install, build, run unit/DB/browser runners against t
 
 - First behavior test: independently compute the application message and nullifier in `SPEC.md` §7 and assert the published fixtures/lengths. Expected initial red: the protocol encoding function does not exist. Do not compute expected bytes by calling the function under test.
 - Implement canonical UUID/base64url parsing, version/tag/poll/key checks, prepared-message handling, and nullifier computation. Add wrong-version/length/encoding cases. Run focused unit tests, then `test:unit`, typecheck, and build.
+
+**1.1 observed evidence** (commit `da5276b`): the previous session's fixture and grammar code existed without a recorded red; the earliest red observed in this session was the base64url case ("expected undefined to be '_w'"). A first rewrite let base64url rejection cases pass vacuously (calling a missing export throws `TypeError`). Every rejection now asserts its specific error message, and the honest red was 9 failures (`encodeBase64Url is not a function`, missing-message mismatches). Green: 29/29 in `tests/unit/credential.test.ts`. Expected values come from SPEC.md §7 constants and Node `Buffer` base64url, never from the code under test. The 20 grammar/encoding tests that passed first were mutation-checked: removing the length, tag, version, poll, or key-version check; relaxing UUID case or version; dropping the nullifier version byte; skipping the canonical re-encode; or skipping the secret-length check each made at least one test fail. `npm run test:unit` (42), `typecheck`, and `build` passed. Still open for 1.2: running the same fixture in real browsers.
 
 **1.2 Browser/client and native signer spike**
 

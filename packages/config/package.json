@@ -1,0 +1,16 @@
+{
+  "name": "@iitgn-feedback/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/origins.d.ts",
+      "default": "./dist/origins.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "build": "tsc --project tsconfig.json"
+  }
+}

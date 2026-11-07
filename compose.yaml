@@ -1,0 +1,20 @@
+# Local disposable development/test database only. Never use real participant data.
+services:
+  postgres:
+    image: postgres:17@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+    environment:
+      POSTGRES_USER: feedback_local_admin
+      POSTGRES_PASSWORD: feedback_local_only_not_for_production
+      POSTGRES_DB: feedback_local
+    command: ["postgres", "-c", "fsync=on", "-c", "synchronous_commit=on"]
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedback_local_admin -d feedback_local"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+volumes:
+  pgdata:

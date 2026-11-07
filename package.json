@@ -8,13 +8,23 @@
   },
   "workspaces": [
     "apps/*",
-    "services/*"
+    "services/*",
+    "packages/*"
   ],
   "scripts": {
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit --project tsconfig.json",
+    "build": "npm run build --workspaces --if-present",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "test:browser": "playwright test",
+    "test": "npm run test:unit && npm run test:db && npm run test:browser"
   },
   "devDependencies": {
-    "typescript": "5.9.3"
+    "@playwright/test": "1.65.0",
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.1",
+    "typescript": "5.9.3",
+    "vitest": "5.1.0"
   }
 }

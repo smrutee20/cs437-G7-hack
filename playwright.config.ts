@@ -14,6 +14,23 @@ process.env.FEEDBACK_TEST_SIGNER_TOKEN ??= randomBytes(32).toString("base64url")
 process.env.FEEDBACK_TEST_SIGNER_PORT ??= "4180";
 const signerPort = process.env.FEEDBACK_TEST_SIGNER_PORT;
 
+const popupBlockerSpec = /popup-blocker\.spec\.ts/;
+const chromium = {
+  ...devices["Desktop Chrome"],
+  launchOptions: {
+    args: ["--no-proxy-server", `--host-resolver-rules=${hosts.map((host) => `MAP ${host} 127.0.0.1`).join(",")}`],
+  },
+};
+const firefox = {
+  ...devices["Desktop Firefox"],
+  launchOptions: {
+    firefoxUserPrefs: {
+      "network.dns.localDomains": hosts.join(","),
+      "network.proxy.type": 0,
+    } as Record<string, string | number | boolean>,
+  },
+};
+
 export default defineConfig({
   testDir: "tests/browser",
   fullyParallel: false,
@@ -31,27 +48,23 @@ export default defineConfig({
   },
   projects: [
     { name: "tls", testMatch: /.*\.setup\.ts/ },
+    { name: "chromium", dependencies: ["tls"], testIgnore: popupBlockerSpec, use: chromium },
+    { name: "firefox", dependencies: ["tls"], testIgnore: popupBlockerSpec, use: firefox },
+    // Playwright disables popup blocking by default; these projects turn it back on.
     {
-      name: "chromium",
+      name: "chromium-popup-blocker",
       dependencies: ["tls"],
-      use: {
-        ...devices["Desktop Chrome"],
-        launchOptions: {
-          args: ["--no-proxy-server", `--host-resolver-rules=${hosts.map((host) => `MAP ${host} 127.0.0.1`).join(",")}`],
-        },
-      },
+      testMatch: popupBlockerSpec,
+      // The full Chromium build (new headless) has the popup blocker; headless-shell does not.
+      use: { ...chromium, channel: "chromium", launchOptions: { ...chromium.launchOptions, ignoreDefaultArgs: ["--disable-popup-blocking"] } },
     },
     {
-      name: "firefox",
+      name: "firefox-popup-blocker",
       dependencies: ["tls"],
+      testMatch: popupBlockerSpec,
       use: {
-        ...devices["Desktop Firefox"],
-        launchOptions: {
-          firefoxUserPrefs: {
-            "network.dns.localDomains": hosts.join(","),
-            "network.proxy.type": 0,
-          },
-        },
+        ...firefox,
+        launchOptions: { firefoxUserPrefs: { ...firefox.launchOptions.firefoxUserPrefs, "dom.disable_open_during_load": true } },
       },
     },
   ],

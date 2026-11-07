@@ -4,8 +4,13 @@ const VERSION = 1;
 const SECRET_LENGTH = 32;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
+/** Lowercase canonical RFC 9562 UUIDv4 text (SPEC.md §7 wire rules). */
+export function isCanonicalUuidV4(value: unknown): value is string {
+  return typeof value === "string" && UUID_V4.test(value);
+}
+
 function pollBytes(pollId: string): Uint8Array {
-  if (!UUID_V4.test(pollId)) throw new Error("pollId must be a canonical UUIDv4");
+  if (!isCanonicalUuidV4(pollId)) throw new Error("pollId must be a canonical UUIDv4");
   return Uint8Array.from(pollId.replaceAll("-", "").match(/../g)!, (part) => Number.parseInt(part, 16));
 }
 

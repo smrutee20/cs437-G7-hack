@@ -38,6 +38,18 @@ export function originPort(origin: URL): number {
   return origin.port === "" ? 443 : Number(origin.port);
 }
 
+/**
+ * Headers the dev server sends on every response. COOP stays `unsafe-none` so the
+ * response window and the portal bridge keep their opener link (SPEC.md §8); the
+ * full production CSP/header set belongs to deployment (SPEC.md §14, Milestone 6).
+ */
+export const LOCAL_DEV_HEADERS = {
+  "Cross-Origin-Opener-Policy": "unsafe-none",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+} as const;
+
 /** Vite dev-server options for one app, bound to loopback on its own hostname. */
 export function localDevServer(app: LocalApp, repoRoot: string) {
   const origin = localOrigins()[app];
@@ -48,5 +60,15 @@ export function localDevServer(app: LocalApp, repoRoot: string) {
     strictPort: true,
     allowedHosts: [origin.hostname],
     https: { key: readFileSync(tls.key), cert: readFileSync(tls.cert) },
+    headers: { ...LOCAL_DEV_HEADERS },
+  };
+}
+
+/** Public, fixed peer origins compiled into both browser apps (never secrets). */
+export function originDefines(env: Record<string, string | undefined> = process.env) {
+  const origins = localOrigins(env);
+  return {
+    __PORTAL_ORIGIN__: JSON.stringify(origins.portal.origin),
+    __RESPOND_ORIGIN__: JSON.stringify(origins.respond.origin),
   };
 }

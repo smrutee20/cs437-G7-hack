@@ -1,0 +1,19 @@
+{
+  "name": "@iitgn-feedback/signer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "build": "rolldown --config rolldown.config.ts",
+    "start": "workerd serve config.capnp"
+  },
+  "dependencies": {
+    "@cloudflare/blindrsa-ts": "0.4.6",
+    "workerd": "1.20261023.1",
+    "@iitgn-feedback/protocol": "0.1.0"
+  },
+  "devDependencies": {
+    "rolldown": "1.2.16"
+  }
+}

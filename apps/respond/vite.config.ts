@@ -5,6 +5,10 @@ import { localDevServer } from "../../packages/config/src/local-dev.js";
 
 export default defineConfig(({ command }) => ({
   plugins: [react()],
+  // Use workspace package sources directly (see packages/protocol "source" export).
+  resolve: { conditions: ["source", "module", "browser", "development|production"] },
+  // Pre-bundle up front so first use doesn't trigger a dependency-discovery reload.
+  optimizeDeps: { include: ["@cloudflare/blindrsa-ts"] },
   // Local HTTPS dev server only. Production HTTPS/origin policy belongs to deployment.
   server: command === "serve" ? localDevServer("respond", resolve(import.meta.dirname, "../..")) : undefined,
 }));

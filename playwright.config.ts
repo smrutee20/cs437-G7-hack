@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
 import { localOrigins, localTlsPaths } from "./packages/config/src/local-dev.js";
 
@@ -6,6 +7,12 @@ import { localOrigins, localTlsPaths } from "./packages/config/src/local-dev.js"
 const origins = localOrigins();
 localTlsPaths(import.meta.dirname);
 const hosts = [origins.portal.hostname, origins.respond.hostname];
+
+// Native signer for browser↔server interop tests: loopback only, random per-run
+// credential shared with test workers through the inherited environment.
+process.env.FEEDBACK_TEST_SIGNER_TOKEN ??= randomBytes(32).toString("base64url");
+process.env.FEEDBACK_TEST_SIGNER_PORT ??= "4180";
+const signerPort = process.env.FEEDBACK_TEST_SIGNER_PORT;
 
 export default defineConfig({
   testDir: "tests/browser",
@@ -48,11 +55,21 @@ export default defineConfig({
       },
     },
   ],
-  webServer: (["portal", "respond"] as const).map((app) => ({
-    command: `npm run dev -w @iitgn-feedback/${app}`,
-    url: `https://127.0.0.1:${origins[app].port}`,
-    ignoreHTTPSErrors: true,
-    reuseExistingServer: false,
-    timeout: 30_000,
-  })),
+  webServer: [
+    ...(["portal", "respond"] as const).map((app) => ({
+      command: `npm run dev -w @iitgn-feedback/${app}`,
+      url: `https://127.0.0.1:${origins[app].port}`,
+      ignoreHTTPSErrors: true,
+      reuseExistingServer: false,
+      timeout: 30_000,
+    })),
+    {
+      // Readiness: /health answers 401 without the credential, which Playwright counts as up.
+      command: `npm run build -w @iitgn-feedback/signer && cd services/signer && ../../node_modules/@cloudflare/workerd-linux-64/bin/workerd serve config.capnp --socket-addr http=127.0.0.1:${signerPort}`,
+      url: `http://127.0.0.1:${signerPort}/health`,
+      env: { SIGNER_SERVICE_TOKEN: process.env.FEEDBACK_TEST_SIGNER_TOKEN },
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+  ],
 });

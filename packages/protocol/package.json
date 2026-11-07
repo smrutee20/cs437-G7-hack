@@ -5,12 +5,16 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/credential.d.ts",
-      "default": "./dist/credential.js"
+      "types": "./src/index.ts",
+      "source": "./src/index.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit --project tsconfig.json",
     "build": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@cloudflare/blindrsa-ts": "0.4.6"
   }
 }

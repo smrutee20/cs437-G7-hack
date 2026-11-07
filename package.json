@@ -7,9 +7,9 @@
     "node": ">=24 <25"
   },
   "workspaces": [
+    "packages/*",
     "apps/*",
-    "services/*",
-    "packages/*"
+    "services/*"
   ],
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit --project tsconfig.json",
@@ -17,7 +17,8 @@
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:db": "vitest run --config vitest.db.config.ts",
     "test:browser": "playwright test",
-    "test": "npm run test:unit && npm run test:db && npm run test:browser"
+    "test": "npm run test:unit && npm run test:signer && npm run test:db && npm run test:browser",
+    "test:signer": "vitest run --config vitest.signer.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",
@@ -25,6 +26,7 @@
     "@types/pg": "8.23.1",
     "pg": "8.23.1",
     "typescript": "5.9.3",
-    "vitest": "5.1.0"
+    "vitest": "5.1.0",
+    "rolldown": "1.2.16"
   }
 }

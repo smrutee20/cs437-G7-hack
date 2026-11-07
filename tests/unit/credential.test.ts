@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   computeNullifier,
   decodeBase64Url,
+  decodeBase64UrlUpTo,
   encodeApplicationMessage,
   encodeBase64Url,
   parsePreparedMessage,
@@ -120,5 +121,18 @@ describe("canonical unpadded base64url (SPEC.md §7 wire rules)", () => {
 
   test("rejects non-string input", () => {
     expect(() => decodeBase64Url(42 as unknown as string, 1)).toThrow(/invalid base64url/);
+  });
+
+  test("bounded decoding accepts any canonical length up to the limit and nothing above it", () => {
+    const bytes = Uint8Array.from({ length: 64 }, (_, index) => index * 3);
+    for (const length of [1, 2, 3, 63, 64]) {
+      const text = Buffer.from(bytes.subarray(0, length)).toString("base64url");
+      expect(decodeBase64UrlUpTo(text, 64)).toEqual(bytes.subarray(0, length));
+    }
+    expect(() => decodeBase64UrlUpTo(Buffer.from(new Uint8Array(65)).toString("base64url"), 64)).toThrow(/invalid base64url/);
+    expect(() => decodeBase64UrlUpTo("", 64)).toThrow(/invalid base64url/);
+    expect(() => decodeBase64UrlUpTo("_x", 64)).toThrow(/invalid base64url/);
+    expect(() => decodeBase64UrlUpTo("_w==", 64)).toThrow(/invalid base64url/);
+    expect(() => decodeBase64UrlUpTo("A".repeat(10_000), 64)).toThrow(/invalid base64url/);
   });
 });

@@ -43,13 +43,26 @@ export function encodeBase64Url(bytes: Uint8Array): string {
  * wire field has a fixed size, so the expected byte length is required and checked
  * before decoding. Re-encoding rejects non-zero trailing bits.
  */
-export function decodeBase64Url(text: string, expectedLength: number): Uint8Array {
-  if (typeof text !== "string" || text.length !== base64UrlLength(expectedLength) || !BASE64URL.test(text)) {
+export function decodeBase64Url(text: string, expectedLength: number): Uint8Array<ArrayBuffer> {
+  if (typeof text !== "string" || text.length !== base64UrlLength(expectedLength)) throw new Error("invalid base64url");
+  const bytes = decodeCanonical(text);
+  if (bytes.length !== expectedLength) throw new Error("invalid base64url");
+  return bytes;
+}
+
+/** As `decodeBase64Url`, for variable-size fields: 1..maxLength bytes, length-checked before decoding. */
+export function decodeBase64UrlUpTo(text: string, maxLength: number): Uint8Array<ArrayBuffer> {
+  if (typeof text !== "string" || text.length === 0 || text.length > base64UrlLength(maxLength)) {
     throw new Error("invalid base64url");
   }
+  return decodeCanonical(text);
+}
+
+function decodeCanonical(text: string): Uint8Array<ArrayBuffer> {
+  if (!BASE64URL.test(text) || text.length % 4 === 1) throw new Error("invalid base64url");
   const padded = text.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - (text.length % 4)) % 4);
   const bytes = Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
-  if (bytes.length !== expectedLength || encodeBase64Url(bytes) !== text) throw new Error("invalid base64url");
+  if (encodeBase64Url(bytes) !== text) throw new Error("invalid base64url");
   return bytes;
 }
 

@@ -1,6 +1,6 @@
 # IITGN Anonymous Feedback & Polls
 
-**Current status: foundation and feasibility work (PLAN.md Milestones 0–1). Not ready for participants or deployment.** There is no authentication, signing service, submission, database schema, or results endpoint yet. Nothing here establishes the privacy guarantees in `SPEC.md`.
+**Current status: foundation and feasibility work (PLAN.md Milestones 0–1). Not ready for participants or deployment.** There is no authentication, claim flow, submission, database schema, or results endpoint yet. The native signer is a feasibility proof, not a deployed service. Nothing here establishes the privacy guarantees in `SPEC.md`.
 
 - [`SPEC.md`](SPEC.md): product, privacy, protocol, and release contract.
 - [`PLAN.md`](PLAN.md): milestone sequence, test-first workflow, and recorded evidence.
@@ -11,7 +11,8 @@
 | --- | --- |
 | `apps/portal`, `apps/respond` | Separate browser apps for the two origins (scaffold pages only). |
 | `services/portal-api`, `services/respond-api` | Separate API packages (empty Fastify factories, no listeners). |
-| `packages/protocol` | Credential byte encoding, nullifier, canonical base64url (SPEC.md §7). |
+| `services/signer` | Private native RSA-RAW blind signer for pinned `workerd` (loopback only, no outbound network). |
+| `packages/protocol` | Credential byte encoding, nullifier, canonical base64url (SPEC.md §7), and the client/verifier side of RSABSSA-SHA384-PSS-Randomized. |
 | `packages/config` | Fail-closed portal/response origin-isolation preflight and local dev-server settings. |
 | `tests/unit`, `tests/db`, `tests/browser` | Vitest unit, Vitest + real PostgreSQL, and Playwright suites. |
 
@@ -31,13 +32,16 @@ npx playwright install chromium firefox        # first run only
 ```sh
 npm run typecheck      # all workspaces, plus tests and tooling configs
 npm run build
-npm run test:unit      # pure encoding/validation
+npm run test:unit      # pure encoding/validation and client blind-signature logic
+npm run test:signer    # builds the signer and runs it in pinned workerd on a random loopback port
 npm run test:db        # creates and drops a fresh feedback_test_* database per run
 npm run test:browser   # strict TLS check, then Chromium + Firefox against both hostnames
-npm run test           # unit, then DB, then browser; stops at the first failing suite
+npm run test           # unit, signer, DB, then browser; stops at the first failing suite
 ```
 
-A missing database, certificate, or browser stops with a `SETUP ERROR` (or Playwright's install message). That means the environment is incomplete; it is not a test result.
+A missing database, certificate, workerd binary, or browser stops with a `SETUP ERROR` (or Playwright's install message). That means the environment is incomplete; it is not a test result.
+
+The signer tests and browser tests both start `services/signer` in workerd with a random per-run service credential. The signer harness looks for the `linux-64` workerd binary, so other platforms need that path adjusted. npm 12 blocks workerd's postinstall script; it isn't needed, because the pinned platform binary is installed as an ordinary optional dependency.
 
 ## Two origins
 

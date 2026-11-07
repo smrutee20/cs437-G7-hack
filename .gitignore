@@ -1,0 +1,24 @@
+node_modules/
+dist/
+coverage/
+.vite/
+test-results/
+playwright-report/
+.DS_Store
+
+# Local credentials, identity-provider configuration, keys, and certificates
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.der
+.certs/
+certs/
+
+# Local database volumes and runtime state
+data/
+postgres-data/

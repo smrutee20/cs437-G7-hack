@@ -40,7 +40,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | Milestone | Status | Prerequisite | Main outcome |
 | --- | --- | --- | --- |
 | 0. Foundation | complete (with recorded caveats) | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
-| 1. Feasibility | in progress (1.1–1.2 complete) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
+| 1. Feasibility | complete for synthetic development; 1.4 external checks blocked (release prerequisites) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | not started | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
 | 3. Anonymous issuance | not started | 2 | One durable blind claim per entitlement and reliable browser handoff. |
 | 4. Anonymous redemption | not started | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
@@ -153,10 +153,58 @@ A fresh local checkout can install, build, run unit/DB/browser runners against t
 - With synthetic public data and no real claim endpoint, test fixed-origin `postMessage` readiness/nonce/source checks, popup behavior under browser user gestures, correct `WindowProxy`/COOP behavior, IndexedDB + Web Locks availability, and rejection of forged-origin/source messages. Test portal host-only cookie exclusion from response document/asset/API requests.
 - First browser behavior test should fail for an unimplemented handoff/host boundary, not a TLS or browser-install error. Test popup-blocked, direct-visit, reload, and unsupported-browser paths. Discard spike UI that serves no contract; retain useful browser tests and infrastructure.
 
+**1.3 observed evidence** (commit `87d4104`; Chromium 158.0.8127.18, Firefox 159.0):
+
+*Grammar and process:*
+- The handshake grammar (`packages/protocol/src/bridge.ts`, `tests/unit/bridge.test.ts`) had a red of 23 failures against a pass-through stub; the 3 accept cases passed by construction. Green: 26/26.
+- The response (`apps/respond/src/claim-window.ts`) and portal (`apps/portal/src/claim-bridge.ts`) handshake modules were **written before their browser tests, so no red is claimed**. Hiding them to manufacture one would breach §1. Instead, 13 mutations were run, removing each origin, source, poll, key, nonce, one-init, extra-URL-parameter, and reload check, plus `noopener`. All are now caught. The response-side origin-check mutant initially survived because the only wrong-origin case was also wrong-source; "same window, navigated to another origin" cases were added on both sides.
+- All three `postMessage` calls use exact fixed target origins. A `"*"` target isn't detectable by these tests and stays a code-review item.
+
+*Browser tests (`tests/browser/bridge.spec.ts`, `popup-blocker.spec.ts`, `origins.spec.ts`), each in Chromium and Firefox:*
+- Click-initiated `/claim-bridge?pollId=` with the opener kept. The URL carries only the poll ID, and both documents served `Cross-Origin-Opener-Policy: unsafe-none`.
+- Direct visit gives `direct_visit`; an extra URL parameter gives `invalid_link`; a `null` from `window.open` gives a recoverable `popup_blocked`.
+- Missing Web Locks or IndexedDB gives `unsupported` and no claim button. Capabilities are probed by actually opening IndexedDB and requesting a lock.
+- The response side rejects:
+  - a same-origin window that isn't the opened bridge;
+  - the response window posting to itself;
+  - the opened bridge window after it navigates to another origin;
+  - a wrong poll, wrong type for the state, extra field, JSON string, or more than 2 KiB;
+  - a wrong-nonce ack.
+- The bridge side rejects a wrong key, wrong poll, bad nonce, a non-opener window, itself, the opener after it navigates to the portal origin, and a second init on the same channel. The init seen by the stub had exactly five fields and a 32-byte nonce.
+- Reloading a connected bridge gives `connection_lost`, with no silent reconnect.
+- Forcing `COOP: same-origin` on the bridge severs `window.opener` and prevents connection, which shows the header check is load-bearing.
+- Response-host document, script, and fetch requests carry no portal `__Host-` cookie. Positive control: the same cookie is sent to the portal.
+
+*Findings:*
+- Playwright disables popup blocking by default in both browsers (Chromium `--disable-popup-blocking`; Firefox `playwright.cfg` `dom.disable_open_during_load=false`).
+- `page.evaluate` carries simulated user activation, so it's an invalid no-gesture control.
+- `chromium-headless-shell` has no popup blocker.
+- The `*-popup-blocker` projects therefore use full Chromium (`channel: "chromium"`) without that flag, and Firefox with the pref re-enabled. In both, a load-time `window.open` was blocked while the click-initiated claim window opened and connected.
+
+*Stability and reproducibility:* `--repeat-each=4` over the bridge, popup, and interop specs: 98/98. A fresh clone of `87d4104` passed `npm ci`, certificate creation, `typecheck`, `build`, and `npm run test` (unit 89, signer 28, DB 1, browser 28).
+
+*Deferred to Milestone 3 (not covered here):*
+- `claim_request`/`claim_result`/`stored_ack`;
+- durable `claim_sent` and read-back;
+- the 2-minute same-result resend window;
+- concurrent tabs under Web Locks;
+- simulated IndexedDB write/read-back failure;
+- session expiry and `login_required`;
+- closing either window mid-claim;
+- handshake timeouts.
+
+The spike poll IDs in `apps/*/src/spike-poll.ts` are synthetic placeholders and must be replaced by the public-poll/claim-context APIs.
+
 **1.4 External feasibility inventory (direct checks, not synthetic TDD red)**
 
 - Confirm whether the institution can authorize the OAuth client and whether real signed `email`/`hd` claims meet `SPEC.md` §5. Do not print or commit real tokens or personal data. If accounts/permission are unavailable, mark only the **real-login/release gate** blocked and use synthetic demo identities.
 - Confirm that proposed production hosting provides two approved HTTPS hostnames, private signer isolation, durable PostgreSQL/key storage, and configurable edge/CDN/WAF/error logs. Write down what has actually been verified versus assumed. If logs cannot be disabled as required, real deployment is blocked.
+
+**1.4 observed status (2026-11-07): not verified, so blocked for real participants only.**
+
+- *Institutional OAuth:* not attempted. This environment has no OAuth client, client secret, IITGN Google Workspace admin contact, or institutional test account. Nothing is known about whether IITGN can authorize the client or what the signed `email`/`hd` claims contain. The **real-login gate is blocked**; synthetic demo identities proceed in Milestone 2.
+- *Hosting:* no provider or topology has been chosen. None of the following has been verified: two approved HTTPS hostnames, private signer isolation, durable PostgreSQL, an encrypted key store, or configurable/disableable edge/CDN/WAF/error logs. **Real deployment is blocked.**
+- *Verified so far, on loopback only:* two-hostname cookie/origin isolation, the native signer, and browser interoperation. None of it says anything about a production deployment.
 
 ### Stop/go decision
 
@@ -166,6 +214,26 @@ A fresh local checkout can install, build, run unit/DB/browser runners against t
 ### Exit evidence
 
 Save concise test output, browser network/cookie observations, dependency/runtime pins, signer-path inspection notes, and a release-blocker checklist. No participant data, private keys, credential messages, or authentication tokens in that evidence.
+
+**Stop/go assessment (2026-11-07):** each "Go to Milestone 2" criterion has recorded evidence above:
+
+- the native signer and the browser verifier pass the RFC 9474 vector and an end-to-end blind-signature round trip (1.2);
+- the two-host bridge and cookie boundary are demonstrated in Chromium and Firefox (1.3);
+- the environment reproduces from a fresh clone (0.2/0.3, 1.3).
+
+None of the "stop and revise SPEC.md" conditions occurred. **Recommendation: go to Milestone 2 for synthetic development**, with these items explicitly open.
+
+**Release-blocker checklist** (each item must have evidence before real participants):
+
+1. Institutional OAuth client authorization, and observed signed IITGN `email`/`hd` claims meeting §5 (1.4).
+2. Hosting with two approved HTTPS hostnames, durable PostgreSQL, an encrypted private-key store, private signer network isolation, and edge/CDN/WAF/error logging configured per §15 (1.4).
+3. A signer container image and digest selected and pinned. Today only the npm `workerd` binary is pinned (1.2).
+4. Security review of the native private operation: BoringSSL `0.20261020.0` uses constant-time CRT with a fault check but **no RSA blinding** (1.2).
+5. Signer service-credential provisioning and rotation, plus an issuer-side `0 < m < n` check before claim consumption (Milestone 3).
+6. CI executed on a real remote. `.github/workflows/ci.yml` has never run (0.3).
+7. Production CSP/header set and HSTS from deployment (Milestone 6). Dev servers set only COOP, XFO, Referrer-Policy, and nosniff (1.3).
+8. Synthetic spike poll IDs removed from both apps (Milestones 2–3).
+9. A test harness for non-`linux-64` platforms, if they're needed (1.2).
 
 ## 4. Later milestones — scoped outcomes and exit gates
 

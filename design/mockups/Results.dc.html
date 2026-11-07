@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Poll results</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#111111}
+a{color:#cfcfcf}a:hover{color:#ffffff}
+.dot{transition:background-color .35s ease,box-shadow .35s ease}
+.btn:hover{filter:brightness(1.12)}
+button:focus-visible,a:focus-visible{outline:2px solid #5b8def;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #111111; color: #f2f2f2; font-family: Geist, Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <header style="border-bottom: 1px solid #242424">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 16px 24px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" style="display: block">
+          <g fill="none" stroke="#d4d4d4" stroke-width="1.2" stroke-linejoin="round">
+            <polygon points="14,3 25,9 14,15 3,9"></polygon>
+            <polygon points="3,9 14,15 14,26 3,20"></polygon>
+            <polygon points="14,15 25,9 25,20 14,26"></polygon>
+            <line x1="5.5" y1="13.5" x2="11.5" y2="17"></line>
+          </g>
+        </svg>
+        <span style="font-weight: 600; font-size: 16px; letter-spacing: -0.01em">IITGN Feedback</span>
+        <span style="width: 1px; height: 16px; background: #333333"></span>
+        <span style="font-size: 14px; color: #a3a3a3">Organiser portal</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; border: 1px solid #3a3a3a; border-radius: 999px; padding: 6px 14px 6px 8px; font-size: 13px; color: #e6e6e6; background: #151515">
+        <svg width="22" height="22" viewBox="0 0 30 30" aria-hidden="true" style="display: block">
+          <g fill="none" stroke="#d4d4d4" stroke-width="1.4" stroke-linejoin="round"><rect x="3" y="6" width="24" height="18" rx="3"></rect><circle cx="10.5" cy="13.5" r="3"></circle><path d="M6.5 20.5c.7-1.8 2.1-2.7 4-2.7s3.3.9 4 2.7"></path><line x1="17.5" y1="12" x2="23.5" y2="12"></line><line x1="17.5" y1="16" x2="22" y2="16"></line></g>
+        </svg>
+        demo.organiser@iitgn.ac.in
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1080px; margin: 0 auto; padding: 28px 24px 96px; display: flex; flex-direction: column; gap: 28px">
+
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px">
+      <a href="#" style="font-size: 14px; text-decoration: none">← All polls</a>
+      <div role="group" aria-label="Prototype view" style="display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid #2e2e2e; border-radius: 999px; background: #141414">
+        <span style="font-size: 12px; color: #8f8f8f; padding: 0 8px 0 10px">Prototype view</span>
+        <button type="button" class="btn" onClick="{{setReady}}" aria-pressed="{{isReady}}" style="height: 34px; padding: 0 14px; border-radius: 999px; border: none; background: {{readyBg}}; color: {{readyColor}}; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">Ready</button>
+        <button type="button" class="btn" onClick="{{setWithheld}}" aria-pressed="{{isWithheld}}" style="height: 34px; padding: 0 14px; border-radius: 999px; border: none; background: {{heldBg}}; color: {{heldColor}}; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">Withheld</button>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+        <div aria-label="Status: closed" style="display: flex; gap: 3px; padding: 7px 9px; background: #0b0b0b; border: 1px solid #2e2e2e; border-radius: 7px">
+          <sc-for list="{{closedPlate}}" as="g" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: repeat(5, 2px); gap: 1px">
+              <sc-for list="{{g.dots}}" as="d" hint-placeholder-count="35">
+                <span style="width: 2px; height: 2px; border-radius: 50%; background: {{d.bg}}"></span>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <span style="font-size: 14px; color: #d4d4d4">Closed Fri, 31 Oct 2026 · 6:00 pm IST</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #8f8f8f">2026-10-31T12:30:00Z</span>
+      </div>
+      <h1 style="margin: 0; font-size: 36px; line-height: 1.15; font-weight: 600; letter-spacing: -0.025em">{{pollTitle}}</h1>
+    </div>
+
+    <sc-if value="{{isReady}}" hint-placeholder-val="{{true}}">
+      <div style="display: flex; flex-direction: column; gap: 20px">
+
+        <div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: center; border: 1px solid #2a2a2a; border-radius: 20px; background: #141414; padding: 28px">
+          <div style="display: flex; flex-direction: column; gap: 12px; padding: 18px 22px; background: #0b0b0b; border: 1px solid #262626; border-radius: 14px">
+            <div aria-label="{{totalLabel}}" style="display: flex; gap: 8px">
+              <sc-for list="{{total}}" as="g" hint-placeholder-count="2">
+                <div style="display: grid; grid-template-columns: repeat(5, 6px); gap: 2px">
+                  <sc-for list="{{g.dots}}" as="d" hint-placeholder-count="35">
+                    <span class="dot" style="width: 6px; height: 6px; border-radius: 50%; background: {{d.bg}}; box-shadow: {{d.glow}}; transition-delay: {{d.delay}}"></span>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.14em; color: #a3a3a3">RESPONSES</span>
+          </div>
+          <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+            <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #d4d4d4">Results were sealed when the poll closed. A question is shown only if at least 5 people answered it.</p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #a3a3a3">Small counts, unanimous answers and free text can still point to individuals. Share with care.</p>
+            <div>
+              <button type="button" class="btn" onClick="{{replay}}" style="height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid #3a3a3a; background: transparent; color: #e6e6e6; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">Replay reveal</button>
+            </div>
+          </div>
+        </div>
+
+        <section style="border: 1px solid #262626; border-radius: 20px; background: #141414; padding: 26px 28px; display: flex; flex-direction: column; gap: 20px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; gap: 10px; font-size: 12px; color: #a3a3a3"><span style="font-family: 'Geist Mono', monospace">Q1</span><span>Rating · Required</span></div>
+            <h2 style="margin: 0; font-size: 19px; font-weight: 500">How would you rate the food this week?</h2>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 36px; align-items: flex-end">
+            <div style="display: flex; flex-direction: column; gap: 10px">
+              <div aria-label="{{meanLabel}}" style="display: flex; gap: 6px; align-items: flex-end">
+                <sc-for list="{{mean}}" as="g" hint-placeholder-count="4">
+                  <div style="display: grid; grid-template-columns: repeat(5, 5px); gap: 2px">
+                    <sc-for list="{{g.dots}}" as="d" hint-placeholder-count="35">
+                      <span class="dot" style="width: 5px; height: 5px; border-radius: 50%; background: {{d.bg}}; box-shadow: {{d.glow}}; transition-delay: {{d.delay}}"></span>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+              <span style="font-size: 13px; color: #a3a3a3">Mean of 5 · 48 answered · 0 skipped</span>
+            </div>
+            <div style="display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap">
+              <sc-for list="{{columns}}" as="c" hint-placeholder-count="5">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+                  <div aria-hidden="true" style="display: grid; grid-template-columns: repeat(2, 6px); gap: 3px">
+                    <sc-for list="{{c.dots}}" as="d" hint-placeholder-count="24">
+                      <span class="dot" style="width: 6px; height: 6px; border-radius: 50%; background: {{d.bg}}; box-shadow: {{d.glow}}; transition-delay: {{d.delay}}"></span>
+                    </sc-for>
+                  </div>
+                  <span style="font-size: 15px; font-weight: 600">{{c.value}}</span>
+                  <span style="font-size: 12px; color: #a3a3a3; font-family: 'Geist Mono', monospace; white-space: nowrap">{{c.text}}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </section>
+
+        <section style="border: 1px solid #262626; border-radius: 20px; background: #141414; padding: 26px 28px; display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; gap: 10px; font-size: 12px; color: #a3a3a3"><span style="font-family: 'Geist Mono', monospace">Q2</span><span>Single choice · Optional · 41 answered · 7 skipped</span></div>
+            <h2 style="margin: 0; font-size: 19px; font-weight: 500">Which meal needs the most attention?</h2>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <sc-for list="{{options}}" as="o" hint-placeholder-count="4">
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px">
+                <span style="width: 110px; font-size: 15px">{{o.label}}</span>
+                <div aria-hidden="true" style="max-width: 100%; overflow: hidden; display: grid; grid-template-columns: repeat(40, 5px); gap: 3px">
+                  <sc-for list="{{o.dots}}" as="d" hint-placeholder-count="40">
+                    <span class="dot" style="width: 5px; height: 5px; border-radius: 50%; background: {{d.bg}}; box-shadow: {{d.glow}}; transition-delay: {{d.delay}}"></span>
+                  </sc-for>
+                </div>
+                <span style="font-size: 13px; color: #d4d4d4; font-family: 'Geist Mono', monospace; white-space: nowrap">{{o.text}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <p style="margin: 0; font-size: 13px; color: #8f8f8f; line-height: 1.5">Percentages use the 41 people who answered. Totals can differ slightly from 100% because of rounding.</p>
+        </section>
+
+        <section style="border: 1px solid #262626; border-radius: 20px; background: #141414; padding: 26px 28px; display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; gap: 10px; font-size: 12px; color: #a3a3a3"><span style="font-family: 'Geist Mono', monospace">Q3</span><span>Free text · Optional · 7 answered · 41 skipped · shown in random order</span></div>
+            <h2 style="margin: 0; font-size: 19px; font-weight: 500">Anything else the mess committee should know?</h2>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px">
+            <sc-for list="{{texts}}" as="t" hint-placeholder-count="7">
+              <div style="border: 1px solid #262626; border-radius: 14px; background: #111111; padding: 14px 16px; font-size: 15px; line-height: 1.55; color: #e6e6e6; white-space: pre-wrap; overflow-wrap: anywhere">{{t.text}}</div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="border: 1px dashed #333333; border-radius: 20px; background: #121212; padding: 26px 28px; display: flex; flex-direction: column; gap: 16px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; gap: 10px; font-size: 12px; color: #a3a3a3"><span style="font-family: 'Geist Mono', monospace">Q4</span><span>Free text · Optional</span></div>
+            <h2 style="margin: 0; font-size: 19px; font-weight: 500">Any comments for the night canteen?</h2>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: center">
+            <div aria-label="Withheld" style="display: flex; gap: 4px; padding: 10px 12px; background: #0b0b0b; border: 1px solid #262626; border-radius: 10px">
+              <sc-for list="{{heldSmall}}" as="g" hint-placeholder-count="8">
+                <div style="display: grid; grid-template-columns: repeat(5, 3px); gap: 1px">
+                  <sc-for list="{{g.dots}}" as="d" hint-placeholder-count="35">
+                    <span style="width: 3px; height: 3px; border-radius: 50%; background: {{d.bg}}"></span>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <p style="margin: 0; flex: 1 1 280px; font-size: 14px; line-height: 1.6; color: #b5b5b5">Fewer than 5 people answered this question, so its results are withheld. No counts are shown.</p>
+          </div>
+        </section>
+
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isWithheld}}" hint-placeholder-val="{{false}}">
+      <div style="border: 1px solid #2a2a2a; border-radius: 22px; background: #141414; padding: 56px 28px; display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center">
+        <div aria-label="Withheld" style="display: flex; gap: 6px; padding: 18px 22px; background: #0b0b0b; border: 1px solid #262626; border-radius: 14px; max-width: 100%; overflow: hidden">
+          <sc-for list="{{heldBig}}" as="g" hint-placeholder-count="8">
+            <div style="display: grid; grid-template-columns: repeat(5, 5px); gap: 2px">
+              <sc-for list="{{g.dots}}" as="d" hint-placeholder-count="35">
+                <span style="width: 5px; height: 5px; border-radius: 50%; background: {{d.bg}}"></span>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <h2 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.015em">Results permanently withheld</h2>
+        <p style="margin: 0; max-width: 520px; font-size: 16px; line-height: 1.6; color: #b5b5b5">This poll closed with fewer than 5 responses, so its results can't be shown, now or later. There is no override, and the exact number of responses isn't shown either.</p>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1980}}'>
+class Component extends DCLogic {
+  font() {
+    if (!this._F) {
+      this._F = {
+        ' ': '00000,00000,00000,00000,00000,00000,00000',
+        '0': '01110,10001,10011,10101,11001,10001,01110',
+        '1': '00100,01100,00100,00100,00100,00100,01110',
+        '2': '01110,10001,00001,00010,00100,01000,11111',
+        '3': '11111,00010,00100,00010,00001,10001,01110',
+        '4': '00010,00110,01010,10010,11111,00010,00010',
+        '5': '11111,10000,11110,00001,00001,10001,01110',
+        '6': '00110,01000,10000,11110,10001,10001,01110',
+        '7': '11111,00001,00010,00100,01000,01000,01000',
+        '8': '01110,10001,10001,01110,10001,10001,01110',
+        '9': '01110,10001,10001,01111,00001,00010,01100',
+        'C': '01110,10001,10000,10000,10000,10001,01110',
+        'D': '11100,10010,10001,10001,10001,10010,11100',
+        'E': '11111,10000,10000,11110,10000,10000,11111',
+        'H': '10001,10001,10001,11111,10001,10001,10001',
+        'I': '01110,00100,00100,00100,00100,00100,01110',
+        'L': '10000,10000,10000,10000,10000,10000,11111',
+        'O': '01110,10001,10001,10001,10001,10001,01110',
+        'S': '01111,10000,10000,01110,00001,00001,11110',
+        'T': '11111,00100,00100,00100,00100,00100,00100',
+        'W': '10001,10001,10001,10101,10101,10101,01010',
+        '-': '00000,00000,00000,11111,00000,00000,00000',
+        '.': '00000,00000,00000,00000,00000,01100,01100'
+      };
+    }
+    return this._F;
+  }
+
+  glyphs(text, lit, off) {
+    var F = this.font();
+    var out = [];
+    for (var i = 0; i < text.length; i++) {
+      var rows = (F[text.charAt(i)] || F[' ']).split(',');
+      var dots = [];
+      for (var r = 0; r < 7; r++) {
+        for (var c = 0; c < 5; c++) {
+          var on = rows[r].charAt(c) === '1';
+          dots.push({
+            bg: on ? (lit ? '#f7f7f7' : '#6b6b6b') : off,
+            glow: on && lit ? '0 0 6px rgba(255,255,255,0.65)' : 'none',
+            delay: (i * 60 + c * 18) + 'ms'
+          });
+        }
+      }
+      out.push({ dots: dots });
+    }
+    return out;
+  }
+
+  s() {
+    var st = this.state || {};
+    return {
+      view: st.view || 'ready',
+      revealed: !!st.revealed,
+      totalDisp: st.totalDisp || '--',
+      meanDisp: st.meanDisp || '-.--'
+    };
+  }
+
+  componentDidMount() {
+    var self = this;
+    this._m = setTimeout(function () { self.reveal(); }, 450);
+  }
+
+  componentWillUnmount() {
+    if (this._m) clearTimeout(this._m);
+    if (this._t) clearInterval(this._t);
+  }
+
+  reveal() {
+    var self = this;
+    if (this._t) { clearInterval(this._t); this._t = null; }
+    var reduce = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { this.setState({ revealed: true, totalDisp: '48', meanDisp: '3.42' }); return; }
+    this.setState({ revealed: false });
+    var n = 0;
+    var d = function () { return String(Math.floor(Math.random() * 10)); };
+    this._t = setInterval(function () {
+      n++;
+      if (n > 11) {
+        clearInterval(self._t); self._t = null;
+        self.setState({ revealed: true, totalDisp: '48', meanDisp: '3.42' });
+        return;
+      }
+      self.setState({ totalDisp: d() + d(), meanDisp: d() + '.' + d() + d() });
+    }, 60);
+  }
+
+  renderVals() {
+    var self = this;
+    var s = this.s();
+    var ready = s.view === 'ready';
+    var lit = s.revealed;
+
+    var dist = [3, 6, 15, 16, 8];
+    var pcts = ['6.3', '12.5', '31.3', '33.3', '16.7'];
+    var max = 16;
+    var columns = dist.map(function (count, idx) {
+      var h = Math.round(count / max * 12);
+      var dots = [];
+      for (var r = 0; r < 12; r++) {
+        for (var c = 0; c < 2; c++) {
+          var on = lit && (11 - r) < h;
+          dots.push({
+            bg: on ? '#f7f7f7' : '#242424',
+            glow: on ? '0 0 5px rgba(255,255,255,0.55)' : 'none',
+            delay: (idx * 90 + (11 - r) * 35) + 'ms'
+          });
+        }
+      }
+      return { value: String(idx + 1), text: count + ' · ' + pcts[idx] + '%', dots: dots };
+    });
+
+    var opts = [
+      { label: 'Breakfast', count: 9, pct: '22.0' },
+      { label: 'Lunch', count: 6, pct: '14.6' },
+      { label: 'Snacks', count: 4, pct: '9.8' },
+      { label: 'Dinner', count: 22, pct: '53.7' }
+    ];
+    var options = opts.map(function (o, idx) {
+      var n = Math.round(parseFloat(o.pct) / 100 * 40);
+      var dots = [];
+      for (var i = 0; i < 40; i++) {
+        var on = lit && i < n;
+        dots.push({
+          bg: on ? '#f7f7f7' : '#242424',
+          glow: on ? '0 0 5px rgba(255,255,255,0.55)' : 'none',
+          delay: (idx * 80 + i * 22) + 'ms'
+        });
+      }
+      return { label: o.label, text: o.count + ' · ' + o.pct + '%', dots: dots };
+    });
+
+    var texts = [
+      'Queue at dinner moves slowly after 8:30.',
+      'Please bring back the Sunday paneer.',
+      'Dinner rotis were cold most days this week.',
+      'More fruit at breakfast would help.',
+      'Water cooler near the exit needs fixing.',
+      'Snacks were great on Wednesday.',
+      'Less oil in the dal, please.'
+    ].map(function (t) { return { text: t }; });
+
+    return {
+      pollTitle: ready ? 'Mess feedback — October, week 5' : 'Night canteen check-in — October',
+      closedPlate: this.glyphs('CLOSED', false, '#1f1f1f'),
+      total: this.glyphs(s.totalDisp, lit, '#1d1d1d'),
+      totalLabel: lit ? '48 responses' : 'Responses loading',
+      mean: this.glyphs(s.meanDisp, lit, '#1d1d1d'),
+      meanLabel: lit ? 'Mean rating 3.42 out of 5' : 'Mean rating loading',
+      columns: columns,
+      options: options,
+      texts: texts,
+      heldSmall: this.glyphs('WITHHELD', false, '#1d1d1d'),
+      heldBig: this.glyphs('WITHHELD', false, '#1d1d1d'),
+      isReady: ready,
+      isWithheld: !ready,
+      readyBg: ready ? '#2a2a2a' : 'transparent',
+      readyColor: ready ? '#ffffff' : '#a3a3a3',
+      heldBg: !ready ? '#2a2a2a' : 'transparent',
+      heldColor: !ready ? '#ffffff' : '#a3a3a3',
+      setReady: function () { self.setState({ view: 'ready' }); self.reveal(); },
+      setWithheld: function () { self.setState({ view: 'withheld' }); },
+      replay: function () { self.reveal(); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-11-07T13:30:00Z" },
+  "title": "Feedback Booth Design",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 1440, "h": 1560, "title": "Response site · the Booth (click through)", "expand": "fill", "is_interactive": true },
+    "NotFound.dc.html": { "x": 1520, "y": 0, "w": 1200, "h": 820, "title": "404 · the stamp press", "expand": "fill" },
+    "Results.dc.html": { "x": 0, "y": 1680, "w": 1440, "h": 1980, "title": "Portal · results (organiser)", "expand": "fill", "is_interactive": true },
+    "System.dc.html": { "x": 1520, "y": 940, "w": 1200, "h": 1840, "title": "Design system" }
+  },
+  "order": ["Main.dc.html", "NotFound.dc.html", "Results.dc.html", "System.dc.html"],
+  "notes": {
+    "title": { "x": 0, "y": -300, "text": "Feedback Booth: design direction", "kind": "title1", "maxW": 2720 },
+    "howto": { "x": 2800, "y": 0, "text": "Main is clickable: Prepare my credential → Open claim window → Stamp my envelope → Submit answers. Results has a Ready / Withheld toggle. All names, emails and numbers are synthetic sample data.", "w": 340, "fill": "gray" }
+  },
+  "designSystems": []
+}

@@ -34,7 +34,7 @@ async function openedPoll(browser: Browser) {
     }, {
       title: `Synthetic claim ${Date.now()}`, description: "", closesAt: new Date(Date.now() + 86_400_000).toISOString(),
       questions: [{ id: randomUUID(), type: "rating", prompt: "How was it?", required: true }],
-      eligibilityEmails: Array.from({ length: 10 }, (_, i) => `demo-student${i + 1}@iitgn.ac.in`),
+      eligibilityEmails: Array.from({ length: 40 }, (_, i) => `demo-student${i + 1}@iitgn.ac.in`),
     });
   } finally { await context.close(); }
 }
@@ -66,7 +66,9 @@ const storedCredential = (page: Page, pollId: string) => page.evaluate((id) => n
 
 test("an eligible synthetic participant claims a natively signed credential and submits one anonymous response; the same account cannot claim again", async ({ browser }) => {
   const poll = await openedPoll(browser);
-  const first = await signedIn(browser, "student1");
+  // Per-project accounts: projects run in parallel against one launcher's per-account claim limit.
+  const participant = test.info().project.name.includes("firefox") ? "student21" : "student1";
+  const first = await signedIn(browser, participant);
   try {
     await claim(first.page, poll.id);
     await expect(first.page.getByTestId("credential")).toHaveAttribute("data-state", "usable");
@@ -93,7 +95,7 @@ test("an eligible synthetic participant claims a natively signed credential and 
   } finally { await first.context.close(); }
 
   // Same account, fresh browser storage: the server-side entitlement is already consumed.
-  const again = await signedIn(browser, "student1");
+  const again = await signedIn(browser, participant);
   try {
     await claim(again.page, poll.id);
     await expect(again.page.getByTestId("credential")).toHaveAttribute("data-state", "claim_consumed");

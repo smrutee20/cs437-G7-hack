@@ -7,6 +7,40 @@ type Option = {id:string;label:string};
 type Question = {id:string;type:"single_choice"|"rating"|"free_text";prompt:string;required:boolean;options?:Option[]};
 type Summary = {id:string;title:string;status:"draft"|"open"|"closed";revision:number;closesAt:string};
 type Poll = Summary & {description:string;questions:Question[];eligibilityEmails:string[]|null};
+type PublishedQuestion = {questionId:string;state:"published";answeredCount:number;skippedCount:number} & (
+  {type:"single_choice";options:{optionId:string;count:number;percentage:number}[]} |
+  {type:"rating";mean:number;distribution:{value:number;count:number;percentage:number}[]} |
+  {type:"free_text";texts:string[]});
+type ResultItem = PublishedQuestion | {questionId:string;state:"withheld";reason:"insufficient_answers"};
+type Results = {state:"withheld";reason:"insufficient_responses"} | {state:"ready";totalResponses:number;questions:ResultItem[]};
+type ResultsView = {title:string;questions:Question[]} & ({kind:"loaded";results:Results}|{kind:"message";text:string});
+const RESULT_GUIDANCE="Results appear only after closure and at least five responses, and each question needs five answers. "+
+  "This is a publication threshold, not anonymity: small or unanimous categories, free text, repeated polls and outside "+
+  "knowledge can still identify people. Free-text answers are shown in an independent random order, exactly as written.";
+
+/** Plain-text rendering only: every value goes through React's escaping; no HTML, Markdown or links. */
+function ResultsPanel({view}:{view:ResultsView}) {
+  const prompt=(id:string)=>view.questions.find((question)=>question.id===id);
+  return <section aria-label="Results"><h2>Results: {view.title}</h2><p>{RESULT_GUIDANCE}</p>
+    {view.kind==="message"?<p>{view.text}</p>:view.results.state==="withheld"?
+      <p>Results are permanently withheld: fewer than five responses were received.</p>:
+      <><p>{view.results.totalResponses} responses</p>
+        {view.results.questions.map((item)=>{
+          const question=prompt(item.questionId);
+          return <div key={item.questionId}><h3>{question?.prompt??"Question"}</h3>
+            {item.state==="withheld"?<p>Withheld: fewer than five answers.</p>:<>
+              <p>{item.answeredCount} answered, {item.skippedCount} skipped</p>
+              {item.type==="single_choice"&&<ul>{item.options.map((option)=><li key={option.optionId}>
+                {question?.options?.find((candidate)=>candidate.id===option.optionId)?.label??"Option"}: {option.count} ({option.percentage}%)</li>)}</ul>}
+              {item.type==="rating"&&<><p>Mean {item.mean}</p><ul>{item.distribution.map((entry)=><li key={entry.value}>
+                {entry.value}: {entry.count} ({entry.percentage}%)</li>)}</ul></>}
+              {item.type==="free_text"&&<ul>{item.texts.map((text,index)=><li key={index} style={{whiteSpace:"pre-wrap"}}>{text}</li>)}</ul>}
+            </>}
+          </div>;
+        })}</>}
+  </section>;
+}
+
 const blankQuestion=():Question=>({id:crypto.randomUUID(),type:"rating",prompt:"",required:true});
 function localDate(instant:Date):string {
   const pad=(value:number)=>String(value).padStart(2,"0");
@@ -28,6 +62,7 @@ export function OrganiserApp() {
   const [eligibility,setEligibility]=useState("");
   const [questions,setQuestions]=useState<Question[]>([blankQuestion()]);
   const [preview,setPreview]=useState(false);
+  const [results,setResults]=useState<ResultsView|null>(null);
 
   const refreshSession=async()=>{
     const response=await fetch("/api/v1/session",{credentials:"same-origin",cache:"no-store"});
@@ -103,6 +138,15 @@ export function OrganiserApp() {
       await refreshPolls();setNotice(`Poll is ${updated.status}.`);
     });
   };
+  const viewResults=(poll:Summary)=>void perform(async()=>{
+    const owned=await (await fetch(`/api/v1/polls/${poll.id}`,{credentials:"same-origin",cache:"no-store"})).json() as Poll;
+    const response=await fetch(`/api/v1/polls/${poll.id}/results`,{credentials:"same-origin",cache:"no-store"});
+    const base={title:owned.title,questions:owned.questions};
+    if(response.ok) {setResults({...base,kind:"loaded",results:await response.json() as Results});return;}
+    const code=(await response.json().catch(()=>({})) as {error?:{code?:string}}).error?.code;
+    setResults({...base,kind:"message",text:code==="results_not_closed"?"Results are available only after the poll closes.":
+      code==="poll_withdrawn"?"This poll was withdrawn. Its results are permanently withheld.":"Results are unavailable."});
+  });
   const updateQuestion=(index:number,change:Partial<Question>)=>setQuestions((current)=>current.map((question,i)=>
     i===index?{...question,...change}:question));
 
@@ -123,8 +167,10 @@ export function OrganiserApp() {
         <button type="button" onClick={()=>void choose(poll.id)}>{poll.title}</button> — Poll is {poll.status}.
         {poll.status==="draft"&&<button type="button" disabled={busy} onClick={()=>transition(poll,"open")}>Open poll</button>}
         {poll.status==="open"&&<button type="button" disabled={busy} onClick={()=>transition(poll,"close")}>Close poll</button>}
+        {poll.status==="closed"&&<button type="button" disabled={busy} onClick={()=>viewResults(poll)}>View results</button>}
         <a href={`${__RESPOND_ORIGIN__}/p/${poll.id}`} target="_blank" rel="noopener noreferrer">Public poll link</a>
       </li>)}</ul>
+      {results&&<ResultsPanel view={results} />}
       <form onSubmit={save}><fieldset disabled={busy}>
         <h2>{active?`Edit ${active.title}`:"Create draft"}</h2>
         <label>Poll title<input value={title} maxLength={480} onChange={(event)=>setTitle(event.target.value)} required /></label>

@@ -44,7 +44,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | 2. Poll foundation | complete for synthetic development; production auth/operations deferred to 6 | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
 | 3. Anonymous issuance | complete for synthetic development; signer provisioning and request budget deferred to 6 | 2 | One durable blind claim per entitlement and reliable browser handoff. |
 | 4. Anonymous redemption | complete for synthetic development; log review and draft persistence deferred | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
-| 5. Results | not started | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
+| 5. Results | complete for synthetic development; results-withdrawal journal and operations deferred to 6 | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
 | 6. Production boundaries | not started | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
 | 7. Demo and release review | not started | 6 for real release; 5 for synthetic demo | Complete walkthrough and independently checked acceptance evidence. |
 
@@ -489,6 +489,54 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 - Leading tests: four responses permanently withhold results; five responses do not publish a question with four answers; ready results contain only allowed aggregates/texts; result publication waits for admitted in-flight commits.
 - Exit: owner sees results only after closure and thresholds; the actual JSON cannot reconstruct cross-question response profiles from row ordering/IDs; malicious content remains inert in browser tests.
 
+**Slice 1 (gated publication function and route, 2026-11-08):**
+
+- **Migration.** `0005_results.sql` (forward-only) adds `anonymous.result_snapshots(poll_id, result)`, which can hold only a `ready` DTO. `anonymous.publish_results(poll, owner)` is `SECURITY DEFINER` and runs in this order:
+  1. the ownership check;
+  2. `FOR UPDATE`, the conflicting closure lock, which waits for admitted claims, redemptions and replays;
+  3. materializing deadline closure (`closed_at = closes_at`);
+  4. not-closed → `results_not_closed`, invalidated → `poll_withdrawn` (checked *before* any existing snapshot is returned);
+  5. an existing snapshot;
+  6. fewer than 5 responses → permanent `withheld`;
+  7. per-question thresholds and the aggregates.
+- **Aggregates.** Percentages use `round(…, 1)` over `answeredCount`, and the mean uses `round(…, 2)`. `round()` here is numeric half away from zero, which is half-up for these non-negative values. Each free-text question is ordered by its own `gen_random_uuid()` (pg_strong_random). The snapshot is inserted once. `feedback_portal_admin` gets only `USAGE` and `EXECUTE`; neither the portal nor the public role can read responses or snapshots.
+- **Service.** `services/portal-api/src/results.ts` calls the function; `GET /api/v1/polls/:id/results` maps the outcomes to 200, 409, 404 and 410 and rejects any query string.
+- **`tests/db/results.test.ts`:** red was 6/6 "not implemented". On the first implementation run 5/6 passed; the sixth was a **test arithmetic bug** (the ratings summed to 16, not the intended 17). The fix exercises the 2.125 → 2.13 half-up boundary. Covered:
+  - not-closed refusal;
+  - another organiser and an unknown poll get 404 even after closure;
+  - 4 responses are withheld, repeatably;
+  - exact single-choice, rating and free-text DTOs, with zero counts, schema order and a four-answer question withheld;
+  - 1/16 → 6.3% half-up;
+  - the snapshot is immutable and identical to the stored row, contains no nullifier, and shows independent per-question shuffles (statistical across five polls);
+  - publication waits for an admitted in-flight response across the deadline and includes it;
+  - publication waits on a closed poll's shared lock, and 4 concurrent first reads produce one snapshot;
+  - a withdrawn poll gets 410.
+- **Mutation (9):** **all killed**. The no-closure-lock mutant initially survived, because the deadline-materializing `UPDATE` itself waits on the lock; the closed-poll lock and concurrent-reads test added for it now kills it.
+- **Route test** (`tests/db/results-api.test.ts`): red was 404, the route was missing. One over-broad assertion matched the legitimate `policy.minResponses` field (the same trap Milestone 2 hit) and was narrowed. Green.
+
+**Slice 2 (organiser view and synthetic walkthrough, 2026-11-08):**
+
+- **View.** `apps/portal/src/organiser.tsx` adds **View results** for closed polls and a results region. Every value renders through React text escaping: no HTML, Markdown or links, and free text uses `pre-wrap`. It carries threshold and inference guidance that explicitly says this is not anonymity.
+- **Walkthrough.** `tests/demo-browser/results.spec.ts` is SPEC §17 scenario 27 on the real stack. Five synthetic participants each claim and submit:
+  - The results show "5 responses", "Morning: 3 (60%)" and "Evening: 2 (40%)".
+  - A three-answer free-text question is withheld.
+  - On a second poll, hostile strings (`<img onerror>`, `<script>`, a Markdown-style link) render literally, with zero `img`/`script`/`a` elements, no request to the hostile host, and no script effect.
+  - A four-response poll shows only the permanent-withholding sentence, with no numeric count.
+
+  Red: the **View results** button was missing. Two later failures were **test assertion bugs**: a digit check matched timestamp digits in the title, and a whitespace-sensitive substring check was ill-posed. Green in Chromium and Firefox.
+- **Demo-suite collision, found and fixed.** Running every demo spec in parallel exceeded the real five-claims-per-minute limit on shared synthetic accounts: participants returned to `prepared`. That was the limiter working as specified. The launcher now seeds `student1`–`student40`, and each browser project uses its own account range.
+- **Environment finding (not a product defect).** Repeated parallel Firefox runs failed with IndexedDB `UnknownError` because **the root filesystem was full** (95 G of 96 G used, ~127 MB free). Removing this session's scratch clones recovered ~400 MB, and runs at the default worker count pass. Repeat-each stress runs still need more free disk.
+- **Final checks:** typecheck, build, `npm run test` (unit 167, signer 31, DB 50, browser 66), and `FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only npm run test:demo-browser` 8/8.
+
+**Milestone 5 exit assessment — complete for synthetic development only (2026-11-08).**
+
+- The owner sees results only after closure and the thresholds.
+- The JSON carries only aggregates and independently shuffled texts; there are no row IDs or nullifiers.
+- Malicious content stays inert in both browsers.
+- **Residual:**
+  - the operator withdrawal command and journal (results are already gated on `invalidated`), plus retention/purge of snapshots: Milestone 6;
+  - result-access audit and log review: scenario 19.
+
 ### Milestone 6 — Production boundaries and operations
 
 - Implement/test real Google OIDC (only with authorized institutional accounts), session/CSRF flow, runtime DB privileges, request bounds, strict deployment headers, logging controls, scheduled retention, key destruction, purge/withdrawal journal, backup restore fail-closed policy, and operator withdrawal. Do not bypass external access/hosting requirements for a passing test.
@@ -527,13 +575,13 @@ The numbers below refer to `SPEC.md` §17. A row assigns the **primary milestone
 | 18 | 5 | Malicious organiser/answer content, CSP, opener, and rendering checks; safe rendering starts in 2. |
 | 19 | 6 | Persistence and real ingress/app/native signer/error log review; enforce safe defaults from 1 onward. |
 | 20 | 6 | Full runtime role/function privilege checks; establish foundational DB roles in 2. |
-| 21 | 5 | Poll/question threshold boundaries and withheld DTOs. |
-| 22 | 5 | Aggregation, skipped answers, stable independent text order, actual JSON shape. |
+| 21 | 5 | Poll/question threshold boundaries and withheld DTOs. Observed: `tests/db/results.test.ts`, `tests/demo-browser/results.spec.ts`. |
+| 22 | 5 | Aggregation, skipped answers, stable independent text order, actual JSON shape. Observed: `tests/db/results.test.ts`, `tests/db/results-api.test.ts`. |
 | 23 | 5 | Immutable policy, withheld permanence, export/filter denial, withdrawal snapshot gating; operations in 6. |
 | 24 | 6 | Overload, limiter privacy, and timeouts. |
 | 25 | 6 | Retention, browser expiry, deletion, and backup schedule. |
 | 26 | 6 | Backup rollback/withdrawal journal/key-loss drills. |
-| 27 | 7 | Full synthetic walkthrough and below-threshold example. |
+| 27 | 7 | Full synthetic walkthrough and below-threshold example. Observed (synthetic, local): `tests/demo-browser/results.spec.ts`; the Milestone 7 review is still to do. |
 
 ## 6. First execution decision
 

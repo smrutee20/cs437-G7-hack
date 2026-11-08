@@ -25,7 +25,7 @@ export async function rollbackFoundation(databaseUrl: string): Promise<void> {
   const pool = new Pool({ connectionString: databaseUrl });
   try {
     await pool.query(`DROP VIEW IF EXISTS public_polls;
-      DROP TABLE IF EXISTS anonymous.responses, identity.claims, identity.eligibility, signing_keys, polls, identity.users;
+      DROP TABLE IF EXISTS anonymous.result_snapshots, anonymous.responses, identity.claims, identity.eligibility, signing_keys, polls, identity.users;
       DROP FUNCTION IF EXISTS create_draft_poll(uuid,uuid,text,text,timestamptz,jsonb,uuid,jsonb,bytea,text,text[]),
         delete_draft_poll(uuid,uuid), freeze_open_poll(), freeze_open_eligibility(), freeze_open_key();
       DROP SCHEMA IF EXISTS anonymous, identity, operations, drizzle CASCADE;

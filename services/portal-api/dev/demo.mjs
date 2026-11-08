@@ -26,7 +26,7 @@ if (process.env.FEEDBACK_ENABLE_SYNTHETIC_DEMO !== "yes-synthetic-only" ||
   throw new Error("SETUP ERROR: synthetic demo requires an explicit flag, exact local .test origins and disposable local DB");
 }
 
-const actorNames = ["organiser", ...Array.from({length:10},(_,i)=>`student${i+1}`), "ineligible"];
+const actorNames = ["organiser", ...Array.from({length:40},(_,i)=>`student${i+1}`), "ineligible"];
 const secrets = new Map();
 const until = () => Date.now()+8*60*60*1000;
 const session = (request) => {

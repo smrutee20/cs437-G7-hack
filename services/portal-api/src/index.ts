@@ -9,6 +9,7 @@ import { makeCursor, readCursor } from "./cursor.js";
 import { createSigningCapacity } from "./capacity.js";
 import { ClaimError, issueClaim, type ClaimErrorCode } from "./claim.js";
 import { loadPrivateKey } from "./keys.js";
+import { readResults } from "./results.js";
 import { createAccountLimiter } from "./rate-limit.js";
 import type { SignerClient } from "./signer-client.js";
 
@@ -169,6 +170,14 @@ export function createApp(config: Config) {
   });
   app.get<{Params:{id:string}}>("/api/v1/polls/:id",async(req)=>
     withClient((client)=>ownerPoll(client,sessions.get(req)!.id,req.params.id)));
+  // Owner only; the database function checks ownership before any threshold (SPEC.md §11).
+  app.get<{Params:{id:string}}>("/api/v1/polls/:id/results",async(req,reply)=>{
+    if (req.url.includes("?")) throw new ApiError(400,"invalid_request"); // no filters, subgroups or exports
+    const outcome=await withClient((client)=>readResults(client,sessions.get(req)!.id,req.params.id));
+    if (outcome.outcome==="ready") return outcome.result;
+    const status=outcome.outcome==="not_found"?404:outcome.outcome==="results_not_closed"?409:410;
+    return reply.code(status).send(error(outcome.outcome));
+  });
   app.get<{Params:{id:string}}>("/api/v1/polls/:id/claim-context",async(req)=>withClient(async(client)=>{
     if (!isCanonicalUuidV4(req.params.id)) throw new PollError("not_found");
     const {rows}=await client.query(

@@ -31,7 +31,7 @@ export async function rollbackFoundation(databaseUrl: string): Promise<void> {
         protect_poll_delete(), protect_retained_rows(), effective_closed_at(text,timestamptz,timestamptz),
         poll_access_expired(text,timestamptz,timestamptz), eligibility_expired(text,timestamptz,timestamptz), is_table_owner(oid), poll_is_open(uuid);
       DROP SCHEMA IF EXISTS anonymous, identity, operations, drizzle CASCADE;
-      GRANT CREATE ON SCHEMA public TO PUBLIC;`);
+      GRANT CREATE, USAGE ON SCHEMA public TO PUBLIC;`);
   } finally {
     await pool.end();
   }

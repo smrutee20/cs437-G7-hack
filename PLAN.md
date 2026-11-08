@@ -658,6 +658,27 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 - **Final checks on this tree:** typecheck; build (the production portal bundle contains no `__demo`, the demo bundle does, and no `data:` URIs); unit 174, signer 31, DB 64, browser 68 (Chromium and Firefox); `test:demo-browser` 10/10.
 - **Not established:** accessibility review with assistive technology, the mobile layout (spec: desktop only), and visual regression baselines.
 
+**Slice 5 (privilege audit, logging review, build gate, 2026-11-08):**
+
+- **Scenario 20.** `tests/db/privileges.test.ts` lists, for each of the eight runtime roles, the exact table, column, function and schema privileges its job needs, written from SPEC.md §12 rather than read back. It also checks that no role can create objects or temporary tables, own anything, or hold elevated attributes; that every `SECURITY DEFINER` function pins `search_path=pg_catalog` and is not executable by `PUBLIC`; and that temp-table/function shadowing and forbidden reads are refused.
+  - **Red: 10 of 11 failed, all on real over-grants from earlier migrations:**
+    - `feedback_portal_admin` had table-wide `UPDATE` on `polls` (including `organiser_id`, so drafts could be reassigned) plus `INSERT`/`DELETE` (bypassing the journaled delete) and eligibility `UPDATE`;
+    - `feedback_issuer` could read `users`/`eligibility`;
+    - helper functions were executable by `PUBLIC`;
+    - `PUBLIC` kept `USAGE` on schema `public` and `TEMP` on the database.
+  - Forward migration `0009_least_privilege.sql` removes them: column-scoped portal `UPDATE`, no `PUBLIC` function execution (including default privileges), explicit helper grants, and `TEMP` revoked. Green 11/11.
+  - Two consequences were fixed honestly. A list-test fixture had used the portal role to rewrite `created_at` and now runs as the owner. The startup role check's `'public.polls'::regclass` needed schema usage the auth login no longer has, so it now reads the catalog.
+- **Scenario 19:**
+  - The disposable PostgreSQL now runs with `log_statement=none`, `log_min_error_statement=panic`, `log_min_messages=fatal`, terse output and no parameter logging (`compose.yaml`). Default `ERROR … DETAIL: Key (…)=(…)` lines would otherwise echo eligibility emails.
+  - `tests/db/logging.test.ts` asserts those settings and induces cast, parameter and unique-key errors carrying a sentinel. `docker compose logs postgres` contains no sentinel, and a positive control (a FATAL failed connection naming a control database) proves the scan reads the log.
+  - The portal and response apps run their validation, framing, cursor, OIDC-callback, DB-failure (500/503) and admission paths with sentinel credentials, answers, emails, codes, cookies and user-agents. Nothing is written to stdout, stderr or the console; no response echoes a sentinel; and no Fastify request logger exists (Pino writes to the fd directly, so the absence is asserted on the instance).
+  - Written after implementation, so it **passed first**. Mutation: 5 mutants (console logging in either error handler, an echoed exception, an enabled logger) all killed; the logger mutant survived until the instance assertion was added.
+- **Scenarios 4 and 24:**
+  - `npm run build` now ends with `scripts/check-production-bundles.mjs`. It refuses a production bundle containing the synthetic login or inline script/style; checked negatively against `dist-demo`.
+  - `tests/unit/http-bounds.test.ts` covers the 10 s budget (bounded 503, no crash when the handler finishes late) and the exact ingress strip list.
+- **Broader checks:** typecheck, build plus gate, unit 176, DB 78 (+1 skipped diagnostic dump).
+- **Not established:** proxy, CDN, WAF or crash-reporter configuration on real hosting; core dumps and swap (deployment documentation follows).
+
 ### Milestone 7 — Walkthrough and release review
 
 - Run the ten-eligible/five-response demo and four-response withheld demo from `SPEC.md` §17; verify in both supported browsers and review all 27 scenario records, performance limits, recovery drills, network/log captures, and actual API payloads.
@@ -688,8 +709,8 @@ The numbers below refer to `SPEC.md` §17. A row assigns the **primary milestone
 | 16 | 3 | Full bridge/store failure modes; basic handoff proof begins in 1. Observed: `tests/browser/{bridge,claim,claim-interruptions,popup-blocker}.spec.ts`; a response tab closed mid-claim is not yet covered. |
 | 17 | 4 | Browser prepared/usable/pending/terminal cleanup and no-secret transport checks. Observed: `tests/browser/{claim,submit,draft}.spec.ts` (draft answers persisted in IndexedDB only, erased on acceptance). |
 | 18 | 5 | Malicious organiser/answer content, CSP, opener, and rendering checks; safe rendering starts in 2. Observed: `tests/demo-browser/{results,poll-content,csp}.spec.ts` on the production bundles under the enforced CSP (zero violations; inline script/eval/style attribute/remote image refused). |
-| 19 | 6 | Persistence and real ingress/app/native signer/error log review; enforce safe defaults from 1 onward. |
-| 20 | 6 | Full runtime role/function privilege checks; establish foundational DB roles in 2. |
+| 19 | 6 | Persistence and real ingress/app/native signer/error log review; enforce safe defaults from 1 onward. Observed (local): `tests/db/logging.test.ts` (no process output on error paths, no echo, PostgreSQL log keeps no statements/parameters/details), `tests/signer/signer.test.ts` (signer log). Real ingress/CDN/WAF: not available. |
+| 20 | 6 | Full runtime role/function privilege checks; establish foundational DB roles in 2. Observed: `tests/db/privileges.test.ts` (exact least-privilege sets for 8 roles; red found real over-grants fixed by `0009`). |
 | 21 | 5 | Poll/question threshold boundaries and withheld DTOs. Observed: `tests/db/results.test.ts`, `tests/demo-browser/results.spec.ts`. |
 | 22 | 5 | Aggregation, skipped answers, stable independent text order, actual JSON shape. Observed: `tests/db/results.test.ts`, `tests/db/results-api.test.ts`. |
 | 23 | 5 | Immutable policy, withheld permanence, export/filter denial, withdrawal snapshot gating; operations in 6. |

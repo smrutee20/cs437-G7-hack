@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit --project tsconfig.json",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present && node scripts/check-production-bundles.mjs",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:db": "vitest run --config vitest.db.config.ts",
     "test:browser": "playwright test",

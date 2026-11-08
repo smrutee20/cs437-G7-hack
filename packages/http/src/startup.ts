@@ -36,7 +36,8 @@ type Queryable = { query: (sql: string, params?: unknown[]) => Promise<{ rows: R
 export async function assertDatabaseRole(client: Queryable, expected: typeof RUNTIME_ROLES[number], setting: string): Promise<void> {
   const { rows } = await client.query(
     `SELECT r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb AS privileged,
-            pg_has_role(current_user, (SELECT relowner FROM pg_class WHERE oid = 'public.polls'::regclass), 'MEMBER') AS owner,
+            COALESCE(pg_has_role(current_user, (SELECT c.relowner FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                                                 WHERE n.nspname = 'public' AND c.relname = 'polls'), 'MEMBER'), false) AS owner,
             ARRAY(SELECT g FROM unnest($1::text[]) AS g
                    WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = g) AND pg_has_role(current_user, g, 'MEMBER')) AS memberships,
             current_setting('fsync') AS fsync, current_setting('synchronous_commit') AS synchronous_commit

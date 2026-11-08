@@ -41,8 +41,8 @@ test("owner-scoped opaque cursor paginates without leaking content or cross-owne
   }
   // Fix identical database creation times to exercise the ID tie-breaker.
   const tie=new Client({connectionString:url});await tie.connect();
-  try {await tie.query("SET ROLE feedback_portal_admin");
-    await tie.query("UPDATE polls SET created_at='2026-01-01T00:00:00.123456Z' WHERE id=ANY($1::uuid[])",[ids]);
+  // Fixture time travel runs as the owner: since 0009 the portal role cannot touch created_at.
+  try {await tie.query("UPDATE polls SET created_at='2026-01-01T00:00:00.123456Z' WHERE id=ANY($1::uuid[])",[ids]);
   } finally {await tie.end();}
   const seen:string[]=[];let cursor:string|null=null;
   do {

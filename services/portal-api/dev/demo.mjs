@@ -129,7 +129,7 @@ async function start() {
   const portal=portalApp({origin:origins.portal.origin,keyDirectory:keysDir,encryptionKey:master,cursorKey,
     authenticate:async(request)=>session(request),acquireClient:acquire(portalPool),
     issuer:{acquireClient:acquire(issuerPool),signer:native.signer}});
-  const respond=respondApp({acquireClient:acquire(publicPool)});
+  const respond=respondApp({origin:origins.respond.origin,acquireClient:acquire(publicPool)});
   const demo=Fastify({logger:false,bodyLimit:128});
   demo.addHook("onRequest",async(_req,reply)=>{reply.header("Cache-Control","no-store");});
   demo.post("/__demo/login",async(request,reply)=>{

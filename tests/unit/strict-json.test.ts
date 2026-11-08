@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { parseStrictJson } from "../../services/portal-api/src/strict-json";
+import { parseStrictJson } from "../../packages/protocol/src/strict-json";
 
 const parse = (json: string) => parseStrictJson(Buffer.from(json, "utf8"));
 test("rejects duplicate member names in nested objects, including escaped equivalents", () => {

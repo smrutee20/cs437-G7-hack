@@ -59,7 +59,13 @@ async function decide(client: Client, pollId: string, nullifier: Uint8Array, ans
   }
 }
 
-export async function redeemResponse(client: Client, pollId: string, body: unknown): Promise<{ status: 200 | 201 }> {
+export type RedeemOptions = {
+  /** Bounds concurrent signature verification (SPEC.md §14); may throw to refuse before any work. */
+  verify?: <T>(task: () => Promise<T>) => Promise<T>;
+};
+
+export async function redeemResponse(client: Client, pollId: string, body: unknown,
+  options: RedeemOptions = {}): Promise<{ status: 200 | 201 }> {
   // 1. Framing, then the poll's expected key, signature, and message grammar.
   const request = parseBody(body);
   if (!isCanonicalUuidV4(pollId)) throw new RedeemError("not_found");
@@ -74,16 +80,19 @@ export async function redeemResponse(client: Client, pollId: string, body: unkno
   if (!poll) throw new RedeemError("not_found");
   if (poll.invalidated) throw new RedeemError("poll_withdrawn");
   if (request.keyId !== poll.key_id || request.keyVersion !== 1 || poll.key_version !== 1) throw new RedeemError("invalid_credential");
-  let nullifier: Uint8Array;
-  try {
-    const key = await importPollPublicKey(poll.public_jwk);
-    if (!(await verifySignature(key, request.prepared, request.signature))) throw new Error();
-    const { secret } = parsePreparedMessage(request.prepared, pollId); // only after verification
-    nullifier = await computeNullifier(pollId, secret);
-    secret.fill(0);
-  } catch {
-    throw new RedeemError("invalid_credential");
-  }
+  const publicJwk = poll.public_jwk;
+  const nullifier = await (options.verify ?? ((task) => task()))(async () => {
+    try {
+      const key = await importPollPublicKey(publicJwk);
+      if (!(await verifySignature(key, request.prepared, request.signature))) throw new Error();
+      const { secret } = parsePreparedMessage(request.prepared, pollId); // only after verification
+      const value = await computeNullifier(pollId, secret);
+      secret.fill(0);
+      return value;
+    } catch {
+      throw new RedeemError("invalid_credential");
+    }
+  });
   // 2. Frozen-schema answers; a validation failure does not touch the database.
   const canonical = canonicalizeAnswers(poll.questions, request.answers);
   if (!canonical.ok) throw new RedeemError("validation_failed", canonical.field);

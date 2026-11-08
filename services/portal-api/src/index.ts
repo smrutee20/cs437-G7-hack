@@ -1,11 +1,10 @@
 import Fastify, { type FastifyRequest } from "fastify";
 import type { Client } from "pg";
-import { isCanonicalUuidV4 } from "@iitgn-feedback/protocol";
+import { isCanonicalUuidV4, parseStrictJson } from "@iitgn-feedback/protocol";
 import { createDraft } from "./create-draft.js";
 import { deleteDraft } from "./delete-draft.js";
 import { DraftValidationError } from "./draft.js";
 import { closePoll, openPoll, PollError, updateDraft } from "./poll-lifecycle.js";
-import { parseStrictJson } from "./strict-json.js";
 import { makeCursor, readCursor } from "./cursor.js";
 import { createSigningCapacity } from "./capacity.js";
 import { ClaimError, issueClaim, type ClaimErrorCode } from "./claim.js";

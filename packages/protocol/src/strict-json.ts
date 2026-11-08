@@ -1,7 +1,7 @@
 import { visit } from "jsonc-parser";
 
 /** Reject duplicate JSON member names at any depth, including escaped spellings. */
-export function parseStrictJson(bytes: Buffer): unknown {
+export function parseStrictJson(bytes: Uint8Array): unknown {
   const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   const objects: Set<string>[] = [];
   let invalid = false;

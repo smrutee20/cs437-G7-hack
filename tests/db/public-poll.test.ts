@@ -19,7 +19,7 @@ beforeAll(async()=>{
   await admin.query(`INSERT INTO identity.users(id,issuer,subject,email,is_organiser)
     VALUES($1,'https://accounts.google.com','synthetic-public-owner','owner@iitgn.ac.in',true)`,[owner]);
   await admin.query("SET ROLE feedback_portal_admin");
-  app=createApp({acquireClient:async()=>{
+  app=createApp({origin:"https://respond.feedback.test:4174",acquireClient:async()=>{
     const client=new Client({connectionString:url});await client.connect();
     await client.query("SET ROLE feedback_response_public");
     return {client,release:()=>client.end()};

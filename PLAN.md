@@ -43,7 +43,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | 1. Feasibility | complete for synthetic development; 1.4 external checks blocked (release prerequisites) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | complete for synthetic development; production auth/operations deferred to 6 | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
 | 3. Anonymous issuance | complete for synthetic development; signer provisioning and request budget deferred to 6 | 2 | One durable blind claim per entitlement and reliable browser handoff. |
-| 4. Anonymous redemption | in progress (server redemption done; HTTP route and browser submission not started) | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
+| 4. Anonymous redemption | in progress (server redemption and public route done; browser submission not started) | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
 | 5. Results | not started | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
 | 6. Production boundaries | not started | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
 | 7. Demo and release review | not started | 6 for real release; 5 for synthetic demo | Complete walkthrough and independently checked acceptance evidence. |
@@ -411,7 +411,30 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 
   **Remaining survivor:** a plain `INSERT` without `ON CONFLICT`. It is equivalent because the advisory lock serializes same-nullifier attempts, so `ON CONFLICT` stays as defense in depth.
 - **Broader checks:** typecheck, build, unit 164/164, DB 38/38.
-- **Not yet done:** the `POST /polls/:id/responses` route (64 KiB bound, Origin rule, global/per-poll limits, the verification queue), and the browser answer form with `submit_pending` and retry cleanup. No response is submitted from a browser yet. **The Milestone 4 exit gate is not met.**
+- **Still open after slice 1:** the public route and the browser submission flow (both addressed below or still open).
+
+**Slice 2 (public submission route and admission, 2026-11-08):**
+
+- **Admission** (`services/respond-api/src/admission.ts`):
+  - integer-unit token buckets: public reads 100/s, burst 200; submissions 20/s, burst 40; per poll 5/s, burst 10, with idle per-poll entries forgotten after 10 minutes;
+  - a bounded semaphore for signature verification: 4 concurrent, 20 queued, a 2 s wait, and the slot is released even when the task throws.
+
+  Keys are route class or public poll ID only. Unit red: 3 failures, "not implemented". One semaphore expectation was a **test bug**: instantly finishing waiters correctly drain the queue, so the test now uses waiters that hold their slots. Green 3/3.
+- **Strict JSON** moved from the portal into `packages/protocol/src/strict-json.ts`, so both APIs reject duplicate members the same way. The `jsonc-parser` dependency moved with it, and the relocated tests passed.
+- **`POST /api/v1/polls/:id/responses`.** Header-level checks run in `onRequest`, before any body is read:
+  - an exact response `Origin`, or none;
+  - no query string;
+  - no `Content-Encoding`;
+  - JSON only;
+  - then the global and per-poll buckets (`429` with an integer `Retry-After`).
+
+  The body limit is 64 KiB. `redeemResponse` runs signature verification inside the semaphore; an overload gives 503 `capacity_unavailable`. Responses are exactly `{status:"accepted"}` with 201 or 200, and never set a cookie.
+- **Route tests** (`tests/db/respond-api.test.ts`): red was 404, the route was missing.
+  - After implementation, the global-limit case **failed on wall-clock refill** (41 sequential requests took long enough to refill a token), a timing-dependent test. `createApp` now takes an optional admission clock, which the test freezes. Green 4/4.
+  - Covered: accept/replay/conflict bodies; no echo of signature or answer text; the cookie ignored; an absent Origin allowed; the portal Origin 403; `text/plain` and gzip 415; a credential in the query 400; a duplicate member 400; over 64 KiB 413; an unknown poll 404; none of these spending the credential; tampered signature 400 `invalid_credential`; missing required answer 422 with `field` but no value; closed poll 410; per-poll and global 429.
+- **Route mutation:** 6 mutants, 5 killed (any origin, query allowed, compressed allowed, no per-poll bucket, no global bucket). **Survivor:** removing the verification-semaphore wiring. The semaphore is unit-tested, but driving its limits through HTTP would need a timing-fragile concurrency test; this remains a code-review item.
+- **Broader checks:** typecheck, build, unit 167/167, DB 42/42.
+- **Not yet done:** the browser answer form, `submit_pending` with an exact saved payload and retry, post-acceptance cleanup to an `accepted` marker, and the demo end-to-end submission. **The Milestone 4 exit gate is not met.**
 
 ### Milestone 5 — Gated results
 

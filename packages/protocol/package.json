@@ -15,6 +15,7 @@
     "build": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@cloudflare/blindrsa-ts": "0.4.6"
+    "@cloudflare/blindrsa-ts": "0.4.6",
+    "jsonc-parser": "3.3.1"
   }
 }

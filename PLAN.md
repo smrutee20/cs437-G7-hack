@@ -567,6 +567,46 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 - **Broader checks:** typecheck, build, unit 167/167, DB 54/54, and `test:demo-browser` 8/8.
 - **Not established:** a real Google client, institutional `hd`, or real tokens (release blocker 1). No production listener exists yet.
 
+**Slice 2 (retention, key destruction, withdrawal journal and recovery, 2026-11-08):**
+
+- **Migration** `0007_operations.sql` (forward-only):
+  - `signing_keys.lifecycle` runs `active → destroy_pending → destroyed`, and the reference is nulled at `destroyed`. The key freeze trigger permits only that forward change after opening.
+  - `polls.invalidation_reason`; withdrawal and its reason are permanent in every state.
+  - Access boundaries applied at read time, independently of deletion: `public_polls`, owner GET/list, `anonymous.redeem` and `anonymous.publish_results` treat polls 90 days past effective closure as not found, and owner DTOs show eligibility as `purged` after 7 days.
+  - Protected rows (claims, responses, snapshots, frozen eligibility/keys, retained polls) can be deleted only in table-owner context (reviewed `SECURITY DEFINER` functions or offline recovery), **never while the poll is open, even by the owner**. `TRUNCATE` is refused on claims, responses and snapshots, and snapshots are immutable.
+  - Retention functions for the non-login `feedback_retention` role: `retention_sweep` (closure materialisation, 7-day claims/eligibility, key marking, auth state, non-organiser users with nothing retained, 1-year tombstones), checked `purge_poll`, and key destruction.
+  - Operator functions for `feedback_operator`: `withdraw_poll`, `set_organiser`, `live_key_refs`.
+  - `operations.journal_state.last_seq` advances by exactly one per journaled change (`journal_ack`).
+  - Owner draft deletion is now `delete_draft_poll(id, owner, seq)`; the unjournaled two-argument version is dropped.
+- **Journal** (`journal.ts`): append-only JSONL outside the DB, chained by SHA-256, fixed member order, fsynced; each entry holds only kind, poll ID, coarse reason and time.
+  - `journaled()` takes a cross-process advisory lock, checks DB/journal agreement, locks and validates the poll (`prepare`), appends, then applies and acknowledges in the same transaction.
+  - `assertJournalInSync` fails closed when they differ (an interrupted change or a restored backup).
+- **Operations** (`operations.ts`, `ops-cli.ts`, `npm run ops`): hourly retention with journaled purges and key-file removal after commit; operator withdrawal (journal first, then the locked change, then key destruction); a missing-key check (`check-keys [--withdraw]`); organiser provisioning against a stable Google subject; and offline `recover`.
+  - Recovery replays every entry, applies tombstones, withdraws **every** poll open in the restored DB (`restored_backup`), withdraws inconsistent closed polls (or all closed polls with `--withdraw-closed`), applies retention, re-acknowledges the journal, then destroys keys.
+  - A missing, torn, truncated or edited journal keeps recovery offline.
+  - Opening now refuses an invalidated draft or one whose key file is missing, and never regenerates a key.
+- **Demo.** `demo.mjs` keeps a local journal in `.certs/`, applies the same startup sync rule (it runs recovery itself if the local DB was wiped or restored), and schedules retention hourly plus at startup and auth-state cleanup every 30 s under a `feedback_demo_retention` login.
+- **Tests** (`tests/db/operations.test.ts`, 5 tests). They were **written after the implementation, so no red is claimed.** They cover:
+  - every retention boundary: key destruction at the next run while the public key and identical-retry confirmation remain; the 7-day purged DTO before deletion and the deletion itself; user cleanup; live state untouched; the 90-day access end before the purge; draft expiry; tombstone expiry; auth-state cleanup;
+  - refused deletes by every request role, plus owner deletes and `TRUNCATE` of live uniqueness state;
+  - withdrawal: journal order and content, closure, key destruction, claim/redeem/results all `poll_withdrawn` (including a cached snapshot), permanence, a withdrawn draft never opening, operator-only provisioning;
+  - missing-key detection, and opening refused (422) without regeneration;
+  - an interrupted journaled change blocking further changes and serving until recovery;
+  - a **real stale backup** (`CREATE DATABASE … TEMPLATE`): after the backup, a deletion, a withdrawal, and a claim plus response that the rollback forgets. On the restored copy, serving is refused until recovery; afterwards the deleted draft stays tombstoned, the withdrawn poll stays withdrawn, the restored open poll is withdrawn with its key destroyed, the forgotten claim and nullifier are refused, the consistent closed poll stays readable, and the journal tamper cases refuse.
+
+  `tests/db/delete-draft.test.ts` now also checks that a refused deletion writes no journal entry.
+- **Mutation** (16 mutants, all killed in the end):
+  - Killed on the first pass: skipping restored-open withdrawal, skipping withdraw replay, ignoring an incomplete journal, a startup check that always passes, no 7-day DTO boundary, no 90-day view boundary, owner deletes of live claims, no key marking, withdrawal leaving the poll open, a purge with no tombstone, `TRUNCATE` allowed, no key destruction after withdrawal, and an unchecked hash chain.
+  - "Withdrawal reversible" survived at first because the reason CHECK constraint already blocks it whenever a reason is set; a case with no reason now kills it.
+  - "Append before prepare" was killed by the new delete-draft journal assertion.
+- **A test caught a real defect during the slice.** The first owner-bypass let the migration owner delete an **open** poll's key. `tests/db/foundation.test.ts` failed, and the bypass now excludes open polls everywhere.
+- **Broader checks:** typecheck, build, unit 167/167, DB 59/59, `test:demo-browser` 8/8. The CLI smoke test (`check-sync`, `check-keys`) ran against the local demo DB.
+- **Not established:**
+  - real backup tooling, WAL archiving or 7-day backup expiry; the procedure is exercised with a database template copy only;
+  - journal storage on separately protected media, and journal compaction after one year;
+  - a scheduled production runner (the production server comes in a later slice);
+  - core-dump and swap configuration.
+
 ### Milestone 7 — Walkthrough and release review
 
 - Run the ten-eligible/five-response demo and four-response withheld demo from `SPEC.md` §17; verify in both supported browsers and review all 27 scenario records, performance limits, recovery drills, network/log captures, and actual API payloads.

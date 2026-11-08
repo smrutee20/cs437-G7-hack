@@ -1,3 +1,5 @@
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
 import Fastify, { type FastifyRequest } from "fastify";
 import type { Client } from "pg";
 import { isCanonicalUuidV4, parseStrictJson } from "@iitgn-feedback/protocol";
@@ -30,6 +32,8 @@ type Config = {
   };
   /** Production sign-in: server-side session store plus Google OIDC routes. */
   auth?: { store: SessionStore; acquireClient: Lease; oidc?: OidcConfig };
+  /** Append-only purge/withdrawal journal outside the database. Without it, drafts cannot be deleted. */
+  journalPath?: string;
 };
 const CLAIM_STATUS: Record<ClaimErrorCode, number> = {
   invalid_request:400, not_found:404, not_eligible:403, claim_consumed:409, poll_closed:410, poll_withdrawn:410,
@@ -104,13 +108,16 @@ export function createApp(config: Config) {
       `WITH deadline_clock AS MATERIALIZED (SELECT clock_timestamp() AS instant)
        SELECT p.id,p.title,p.description,p.invalidated,p.created_at,p.opened_at,p.closes_at,
               p.revision,p.questions,p.eligible_count,
+              eligibility_expired(p.state,p.closes_at,p.closed_at) AS eligibility_purged,
               CASE WHEN p.state='open' AND deadline_clock.instant >= p.closes_at THEN 'closed' ELSE p.state END AS effective_state,
               CASE WHEN p.state='open' AND deadline_clock.instant >= p.closes_at THEN p.closes_at ELSE p.closed_at END AS effective_closed_at
-         FROM polls p CROSS JOIN deadline_clock WHERE p.id=$1 AND p.organiser_id=$2`,[id,owner],
+         FROM polls p CROSS JOIN deadline_clock WHERE p.id=$1 AND p.organiser_id=$2
+          AND NOT poll_access_expired(p.state,p.closes_at,p.closed_at)`,[id,owner],
     );
     if (!rows[0]) throw new PollError("not_found");
     const p=rows[0];
-    const emails=(await client.query<{email:string}>(
+    // Seven days after closure the allowlist is purged from owner DTOs, whether or not deletion has run.
+    const emails=p.eligibility_purged?null:(await client.query<{email:string}>(
       "SELECT email FROM identity.eligibility WHERE poll_id=$1 ORDER BY email",[id],
     )).rows.map((entry)=>entry.email);
     return {
@@ -119,7 +126,7 @@ export function createApp(config: Config) {
       createdAt:p.created_at.toISOString(),openedAt:p.opened_at?.toISOString()??null,
       closedAt:p.effective_closed_at?.toISOString()??null,
       closesAt:p.closes_at.toISOString(),revision:p.revision,questions:p.questions,
-      eligibleCount:p.eligible_count,eligibilityEmails:emails,eligibilityRetention:"retained",
+      eligibleCount:p.eligible_count,eligibilityEmails:emails,eligibilityRetention:emails===null?"purged":"retained",
       policy:{version:1,minEligible:10,minResponses:5,minAnswersPerQuestion:5},
     };
   };
@@ -165,11 +172,12 @@ export function createApp(config: Config) {
       const {rows}=await client.query(
         `WITH deadline_clock AS MATERIALIZED (SELECT clock_timestamp() AS instant)
          SELECT p.id,p.title,p.description,p.state,p.invalidated,p.created_at,p.opened_at,p.closed_at,p.closes_at,
-                p.revision,p.eligible_count,
+                p.revision,p.eligible_count,eligibility_expired(p.state,p.closes_at,p.closed_at) AS eligibility_purged,
                 to_char(p.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_cursor,
                 CASE WHEN p.state='open' AND deadline_clock.instant >= p.closes_at THEN 'closed' ELSE p.state END AS effective_state,
                 CASE WHEN p.state='open' AND deadline_clock.instant >= p.closes_at THEN p.closes_at ELSE p.closed_at END AS effective_closed_at
            FROM polls p CROSS JOIN deadline_clock WHERE p.organiser_id=$1
+             AND NOT poll_access_expired(p.state,p.closes_at,p.closed_at)
              AND ($2::timestamptz IS NULL OR (p.created_at,p.id)<($2::timestamptz,$3::uuid))
            ORDER BY p.created_at DESC,p.id DESC LIMIT $4`,
         [owner,after?.createdAt??null,after?.id??null,limit+1],
@@ -179,7 +187,7 @@ export function createApp(config: Config) {
         id:p.id,title:p.title,description:p.description,status:p.effective_state,invalidated:p.invalidated,
         createdAt:p.created_at.toISOString(),openedAt:p.opened_at?.toISOString()??null,
         closedAt:p.effective_closed_at?.toISOString()??null,closesAt:p.closes_at.toISOString(),
-        revision:p.revision,eligibleCount:p.eligible_count,eligibilityRetention:"retained",
+        revision:p.revision,eligibleCount:p.eligible_count,eligibilityRetention:p.eligibility_purged?"purged":"retained",
         policy:{version:1,minEligible:10,minResponses:5,minAnswersPerQuestion:5},
       })),nextCursor:rows.length>limit?
         makeCursor(owner,page.at(-1).created_cursor,page.at(-1).id,config.cursorKey):null};
@@ -226,7 +234,9 @@ export function createApp(config: Config) {
     const user=sessions.get(req)!;
     if (!user.isOrganiser) throw new ApiError(403,"forbidden");
     fields(req.body,[]);
-    await withClient((client)=>deleteDraft(client,user.id,req.params.id,config.keyDirectory));
+    if (!config.journalPath) throw new ApiError(503,"temporarily_unavailable");
+    const journalPath=config.journalPath;
+    await withClient((client)=>deleteDraft(client,user.id,req.params.id,config.keyDirectory,journalPath));
     return reply.code(204).send();
   });
   app.post<{Params:{id:string}}>("/api/v1/polls/:id/open",async(req)=>{
@@ -234,7 +244,9 @@ export function createApp(config: Config) {
     if (!user.isOrganiser) throw new ApiError(403,"forbidden");
     const rev=revision(req.body);
     return withClient(async(client)=>{
-      await openPoll(client,user.id,req.params.id,rev);
+      // Key files are named by key ID. A missing key is an incident, never a reason to regenerate.
+      await openPoll(client,user.id,req.params.id,rev,async(keyId)=>
+        isCanonicalUuidV4(keyId)&&await stat(join(config.keyDirectory,keyId)).then((info)=>info.isFile(),()=>false));
       return ownerPoll(client,user.id,req.params.id);
     });
   });

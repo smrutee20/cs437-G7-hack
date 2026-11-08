@@ -4,7 +4,7 @@ import { validateDraftInput } from "./draft.js";
 
 type Status = "draft" | "open" | "closed";
 type Outcome = { status: Status; revision: number };
-type PollRow = { status: Status; revision: number; title: string; description: string; closes_at: Date; questions: unknown };
+type PollRow = { status: Status; revision: number; title: string; description: string; closes_at: Date; questions: unknown; invalidated: boolean };
 
 export class PollError extends Error {
   constructor(readonly code: "not_found" | "draft_conflict" | "invalid_state" | "validation_failed") {
@@ -22,7 +22,7 @@ async function locked<T>(client: Client, owner: string, id: string,
     await client.query("SET LOCAL lock_timeout = '2s'");
     await client.query("SET LOCAL statement_timeout = '2s'");
     const { rows } = await client.query<PollRow>(
-      `SELECT state AS status, revision, title, description, closes_at, questions
+      `SELECT state AS status, revision, title, description, closes_at, questions, invalidated
          FROM polls WHERE id=$1 AND organiser_id=$2 FOR UPDATE`, [id, owner],
     );
     if (!rows[0]) throw new PollError("not_found");
@@ -53,9 +53,11 @@ export async function updateDraft(client: Client, owner: string, id: string,
   });
 }
 
-export async function openPoll(client: Client, owner: string, id: string, revision: number): Promise<Outcome> {
+export async function openPoll(client: Client, owner: string, id: string, revision: number,
+  keyPresent: (keyId: string) => Promise<boolean> = async () => true): Promise<Outcome> {
   return locked(client, owner, id, async (row) => {
     if (row.status === "closed") throw new PollError("invalid_state");
+    if (row.invalidated) throw new PollError("invalid_state"); // an operator-withdrawn draft can never open
     if (row.status === "open") {
       const { rows: clock } = await client.query<{ expired: boolean }>(
         "SELECT clock_timestamp() >= closes_at AS expired FROM polls WHERE id=$1", [id],
@@ -75,8 +77,8 @@ export async function openPoll(client: Client, owner: string, id: string, revisi
     )).rows.map((item) => item.email);
     validateDraftInput({ title: row.title, description: row.description,
       closesAt: row.closes_at.toISOString(), questions: row.questions, eligibilityEmails: emails });
-    const key = await client.query("SELECT key_id FROM signing_keys WHERE poll_id=$1", [id]);
-    if (key.rowCount !== 1) throw new PollError("validation_failed");
+    const key = await client.query<{ key_id: string }>("SELECT key_id FROM signing_keys WHERE poll_id=$1", [id]);
+    if (key.rowCount !== 1 || !(await keyPresent(key.rows[0].key_id))) throw new PollError("validation_failed");
     const opened = await client.query(
       `UPDATE polls SET state='open',opened_at=clock_timestamp(),updated_at=clock_timestamp()
          WHERE id=$1 AND closes_at >= clock_timestamp() + interval '10 minutes'

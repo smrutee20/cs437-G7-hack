@@ -12,6 +12,8 @@ import { migrateFoundation } from "../dist/migrate.js";
 import { closeExpiredPolls } from "../dist/expiry.js";
 import { createSignerClient } from "../dist/signer-client.js";
 import { createSessionStore, hostCookie, readTokenCookie, SESSION_COOKIE } from "../dist/auth.js";
+import { assertJournalInSync, readJournal } from "../dist/journal.js";
+import { recoverDeployment, runRetention } from "../dist/operations.js";
 import { createApp as respondApp } from "../../respond-api/dist/index.js";
 import { localOrigins, DEFAULT_LOCAL_ORIGINS } from "../../../packages/config/dist/local-dev.js";
 
@@ -70,12 +72,27 @@ async function start() {
     privateBytes(resolve(repo,".certs/demo-cursor.key")),
   ]);
   await migrateFoundation(adminUrl); // bootstrap-only migration owner, never an API pool
+  const journalPath=resolve(repo,".certs/demo-journal.jsonl");
   const admin=new Client({connectionString:adminUrl});await admin.connect();
+  // Same fail-closed startup rule as production: the database must have acknowledged
+  // exactly the journal head. A fresh local database starts an empty journal; a
+  // wiped or restored one runs the recovery procedure before anything listens.
+  const journal=await readJournal(journalPath);
+  const acknowledged=Number((await admin.query("SELECT last_seq FROM operations.journal_state")).rows[0].last_seq);
+  if (journal.seq===0 && acknowledged===0) {
+    const file=await open(journalPath,constants.O_WRONLY|constants.O_CREAT|constants.O_NOFOLLOW,0o600);await file.close();
+  }
+  try {await assertJournalInSync(admin,journalPath);}
+  catch {
+    const report=await recoverDeployment({client:admin,journalPath,keyDirectory:keysDir});
+    console.log(`Synthetic demo: database and journal disagreed, so the recovery procedure ran (${report.restoredOpenWithdrawn} restored open poll(s) withdrawn).`);
+  }
   const password=randomBytes(32).toString("hex");
   const publicPassword=randomBytes(32).toString("hex");
   const closerPassword=randomBytes(32).toString("hex");
   const issuerPassword=randomBytes(32).toString("hex");
   const authPassword=randomBytes(32).toString("hex");
+  const retentionPassword=randomBytes(32).toString("hex");
   const actors=new Map();
   try {
     for (const [role,pass,grant] of [
@@ -84,6 +101,7 @@ async function start() {
       ["feedback_demo_closer",closerPassword,"feedback_closer"],
       ["feedback_demo_issuer",issuerPassword,"feedback_issuer"],
       ["feedback_demo_auth",authPassword,"feedback_auth"],
+      ["feedback_demo_retention",retentionPassword,"feedback_retention"],
     ]) {
       await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN
         CREATE ROLE ${role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
@@ -107,6 +125,7 @@ async function start() {
   const closerPool=new Pool({connectionString:url("feedback_demo_closer",closerPassword),max:1});
   const issuerPool=new Pool({connectionString:url("feedback_demo_issuer",issuerPassword),max:4});
   const authPool=new Pool({connectionString:url("feedback_demo_auth",authPassword),max:4});
+  const retentionPool=new Pool({connectionString:url("feedback_demo_retention",retentionPassword),max:1});
   const native=await startSigner(5186);
   let closing=false;
   const materialize=async()=>{
@@ -117,8 +136,23 @@ async function start() {
     finally {client?.release();closing=false;}
   };
   await materialize();
-  const interval=setInterval(()=>{void materialize().catch(()=>console.error("Synthetic deadline closer unavailable"));},60_000);
-  interval.unref();
+  // Retention (hourly, plus at startup) and OAuth-transaction/session cleanup (every 30 s).
+  let retaining=false;
+  const retain=async()=>{
+    if(retaining)return;
+    retaining=true;
+    let client;
+    try {client=await retentionPool.connect();await runRetention({client,journalPath,keyDirectory:keysDir});}
+    finally {client?.release();retaining=false;}
+  };
+  await retain();
+  const timers=[
+    setInterval(()=>{void materialize().catch(()=>console.error("Synthetic deadline closer unavailable"));},60_000),
+    setInterval(()=>{void retain().catch(()=>console.error("Synthetic retention run unavailable"));},3_600_000),
+    setInterval(()=>{void retentionPool.query("SELECT operations.expire_auth_state()").catch(()=>{});},30_000),
+  ];
+  for (const timer of timers) timer.unref();
+  const pools=[portalPool,publicPool,closerPool,issuerPool,authPool,retentionPool];
   const acquire=(pool)=>async()=>{
     const client=await pool.connect();return {client,release:async()=>client.release()};
   };
@@ -127,7 +161,7 @@ async function start() {
   const portal=portalApp({origin:origins.portal.origin,keyDirectory:keysDir,encryptionKey:master,cursorKey,
     authenticate:store.authenticate,acquireClient:acquire(portalPool),
     issuer:{acquireClient:acquire(issuerPool),signer:native.signer},
-    auth:{store,acquireClient:acquire(authPool)}});
+    auth:{store,acquireClient:acquire(authPool)},journalPath});
   const respond=respondApp({origin:origins.respond.origin,acquireClient:acquire(publicPool)});
   const demo=Fastify({logger:false,bodyLimit:128});
   demo.addHook("onRequest",async(_req,reply)=>{reply.header("Cache-Control","no-store");});
@@ -152,15 +186,15 @@ async function start() {
     await respond.listen({host:"127.0.0.1",port:5184});
     await demo.listen({host:"127.0.0.1",port:5185});
   } catch(cause) {
-    clearInterval(interval);
+    timers.forEach(clearInterval);
     await Promise.allSettled(servers.map((server)=>server.close()));
-    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end(),issuerPool.end(),authPool.end()]);
+    await Promise.allSettled(pools.map((pool)=>pool.end()));
     native.stop();
     throw cause;
   }
   console.log("Synthetic-only loopback APIs ready (portal 5183, response 5184, demo auth 5185, native signer 5186). No real participants.");
-  const stop=async()=>{clearInterval(interval);await Promise.allSettled(servers.map((server)=>server.close()));
-    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end(),issuerPool.end(),authPool.end()]);native.stop();process.exit(0);};
+  const stop=async()=>{timers.forEach(clearInterval);await Promise.allSettled(servers.map((server)=>server.close()));
+    await Promise.allSettled(pools.map((pool)=>pool.end()));native.stop();process.exit(0);};
   process.once("SIGINT",()=>{void stop();});process.once("SIGTERM",()=>{void stop();});
 }
 await start();

@@ -6,28 +6,32 @@ import { Client } from "pg";
 import { afterAll,beforeAll,expect,inject,test } from "vitest";
 import { createApp } from "../../services/portal-api/src/index";
 import { migrateFoundation,rollbackFoundation } from "../../services/portal-api/src/migrate";
+import { assertJournalInSync, readJournal } from "../../services/portal-api/src/journal";
 
 const url=inject("testDatabaseUrl"), owner=randomUUID(), other=randomUUID();
 const origin="https://portal.feedback.test:4173";
-let dir:string,app:ReturnType<typeof createApp>;
+let dir:string,journalDir:string,app:ReturnType<typeof createApp>;
 const input=()=>({title:"Temporary draft",description:"",closesAt:new Date(Date.now()+86400000).toISOString(),
   questions:[{id:randomUUID(),type:"rating",prompt:"Score?",required:true}],
   eligibilityEmails:Array.from({length:10},(_,i)=>`guest${i}@iitgn.ac.in`)});
 beforeAll(async()=>{
   await migrateFoundation(url);dir=await mkdtemp(join(tmpdir(),"feedback-delete-"));
+  journalDir=await mkdtemp(join(tmpdir(),"feedback-delete-journal-"));
   const admin=new Client({connectionString:url});await admin.connect();
   try{await admin.query(`INSERT INTO identity.users(id,issuer,subject,email,is_organiser) VALUES
     ($1,'https://accounts.google.com','delete-owner','owner@iitgn.ac.in',true),
     ($2,'https://accounts.google.com','delete-other','other@iitgn.ac.in',true)`, [owner,other]);}
   finally{await admin.end();}
   app=createApp({origin,keyDirectory:dir,encryptionKey:randomBytes(32),cursorKey:randomBytes(32),
+    journalPath:join(journalDir,"journal.jsonl"),
     authenticate:async(req)=>({id:req.headers.cookie?.includes("__Host-session=other")?other:owner,
       isOrganiser:true,csrfToken:"csrf"}),
     acquireClient:async()=>{const client=new Client({connectionString:url});await client.connect();
       await client.query("SET ROLE feedback_portal_admin");return {client,release:()=>client.end()};},
   });
 });
-afterAll(async()=>{await app?.close();await rollbackFoundation(url);if(dir)await rm(dir,{recursive:true,force:true});});
+afterAll(async()=>{await app?.close();await rollbackFoundation(url);
+  for (const path of [dir,journalDir]) if(path)await rm(path,{recursive:true,force:true});});
 const request=(method:"POST"|"DELETE"|"GET",path:string,token="owner",payload?:unknown)=>app.inject({
   method,url:`/api/v1${path}`,payload:method==="DELETE"?"{}":payload===undefined?undefined:JSON.stringify(payload),
   headers:{cookie:`__Host-session=${token}`,origin,"x-csrf-token":"csrf","content-type":"application/json"},
@@ -65,5 +69,11 @@ test("an opened poll cannot be deleted by an organiser",async()=>{
   const created=await request("POST","/polls","owner",input());expect(created.statusCode).toBe(201);
   const id=created.json().id;
   expect((await request("POST",`/polls/${id}/open`,"owner",{revision:1})).statusCode).toBe(200);
+  const before=(await readJournal(join(journalDir,"journal.jsonl"))).seq;
   expect((await request("DELETE",`/polls/${id}`)).statusCode).toBe(409);
+  // A refused deletion writes no journal entry, so serving stays in sync.
+  expect((await readJournal(join(journalDir,"journal.jsonl"))).seq).toBe(before);
+  const check=new Client({connectionString:url});await check.connect();
+  try {await check.query("SET ROLE feedback_portal_admin");await assertJournalInSync(check,join(journalDir,"journal.jsonl"));}
+  finally {await check.end();}
 });

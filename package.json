@@ -20,6 +20,7 @@
     "test": "npm run test:unit && npm run test:signer && npm run test:db && npm run test:browser",
     "test:signer": "vitest run --config vitest.signer.config.ts",
     "demo:api": "npm run build && node services/portal-api/dev/demo.mjs",
+    "ops": "node services/portal-api/dist/ops-cli.js",
     "test:demo-browser": "npm run build && playwright test -c playwright.demo.config.ts"
   },
   "devDependencies": {

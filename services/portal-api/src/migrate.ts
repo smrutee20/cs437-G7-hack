@@ -27,7 +27,9 @@ export async function rollbackFoundation(databaseUrl: string): Promise<void> {
     await pool.query(`DROP VIEW IF EXISTS public_polls;
       DROP TABLE IF EXISTS anonymous.result_snapshots, anonymous.responses, identity.sessions, identity.oauth_transactions, identity.claims, identity.eligibility, signing_keys, polls, identity.users;
       DROP FUNCTION IF EXISTS create_draft_poll(uuid,uuid,text,text,timestamptz,jsonb,uuid,jsonb,bytea,text,text[]),
-        delete_draft_poll(uuid,uuid), freeze_open_poll(), freeze_open_eligibility(), freeze_open_key();
+        delete_draft_poll(uuid,uuid), delete_draft_poll(uuid,uuid,bigint), freeze_open_poll(), freeze_open_eligibility(), freeze_open_key(),
+        protect_poll_delete(), protect_retained_rows(), effective_closed_at(text,timestamptz,timestamptz),
+        poll_access_expired(text,timestamptz,timestamptz), eligibility_expired(text,timestamptz,timestamptz), is_table_owner(oid), poll_is_open(uuid);
       DROP SCHEMA IF EXISTS anonymous, identity, operations, drizzle CASCADE;
       GRANT CREATE ON SCHEMA public TO PUBLIC;`);
   } finally {

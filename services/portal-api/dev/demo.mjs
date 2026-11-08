@@ -1,5 +1,6 @@
 // SYNTHETIC LOCAL DEMO ONLY. This file is outside src/ and never built into
 // the portal API package. Do not use with institutional accounts or real data.
+import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { mkdir, open, readFile } from "node:fs/promises";
@@ -9,6 +10,7 @@ import Fastify from "fastify";
 import { createApp as portalApp } from "../dist/index.js";
 import { migrateFoundation } from "../dist/migrate.js";
 import { closeExpiredPolls } from "../dist/expiry.js";
+import { createSignerClient } from "../dist/signer-client.js";
 import { createApp as respondApp } from "../../respond-api/dist/index.js";
 import { localOrigins, DEFAULT_LOCAL_ORIGINS } from "../../../packages/config/dist/local-dev.js";
 
@@ -47,6 +49,26 @@ async function privateBytes(path) {
   }
 }
 
+// Pinned native signer on loopback with a fresh per-run service credential. It has
+// no outbound network and no database access; only the issuer route calls it.
+async function startSigner(port) {
+  const token=randomBytes(32).toString("base64url");
+  const binary=resolve(repo,"node_modules/@cloudflare/workerd-linux-64/bin/workerd");
+  const child=spawn(binary,["serve","config.capnp","--socket-addr",`http=127.0.0.1:${port}`],{
+    cwd:resolve(repo,"services/signer"),env:{PATH:process.env.PATH,SIGNER_SERVICE_TOKEN:token},stdio:["ignore","ignore","ignore"],
+  });
+  const signer=createSignerClient({url:`http://127.0.0.1:${port}`,token,timeoutMs:5000});
+  const deadline=Date.now()+15_000;
+  while (!(await signer.healthy())) {
+    if (child.exitCode!==null || Date.now()>deadline) {
+      child.kill("SIGTERM");
+      throw new Error("SETUP ERROR: synthetic demo signer did not start (run `npm run build` first)");
+    }
+    await new Promise((done)=>setTimeout(done,100));
+  }
+  return {signer,stop:()=>child.kill("SIGTERM")};
+}
+
 async function start() {
   const keysDir=resolve(repo,".certs/demo-keys");
   await mkdir(keysDir,{recursive:true,mode:0o700});
@@ -59,12 +81,14 @@ async function start() {
   const password=randomBytes(32).toString("hex");
   const publicPassword=randomBytes(32).toString("hex");
   const closerPassword=randomBytes(32).toString("hex");
+  const issuerPassword=randomBytes(32).toString("hex");
   const actors=new Map();
   try {
     for (const [role,pass,grant] of [
       ["feedback_demo_portal",password,"feedback_portal_admin"],
       ["feedback_demo_respond",publicPassword,"feedback_response_public"],
       ["feedback_demo_closer",closerPassword,"feedback_closer"],
+      ["feedback_demo_issuer",issuerPassword,"feedback_issuer"],
     ]) {
       await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN
         CREATE ROLE ${role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
@@ -86,6 +110,8 @@ async function start() {
   const portalPool=new Pool({connectionString:url("feedback_demo_portal",password),max:4});
   const publicPool=new Pool({connectionString:url("feedback_demo_respond",publicPassword),max:4});
   const closerPool=new Pool({connectionString:url("feedback_demo_closer",closerPassword),max:1});
+  const issuerPool=new Pool({connectionString:url("feedback_demo_issuer",issuerPassword),max:4});
+  const native=await startSigner(5186);
   let closing=false;
   const materialize=async()=>{
     if(closing)return;
@@ -101,7 +127,8 @@ async function start() {
     const client=await pool.connect();return {client,release:async()=>client.release()};
   };
   const portal=portalApp({origin:origins.portal.origin,keyDirectory:keysDir,encryptionKey:master,cursorKey,
-    authenticate:async(request)=>session(request),acquireClient:acquire(portalPool)});
+    authenticate:async(request)=>session(request),acquireClient:acquire(portalPool),
+    issuer:{acquireClient:acquire(issuerPool),signer:native.signer}});
   const respond=respondApp({acquireClient:acquire(publicPool)});
   const demo=Fastify({logger:false,bodyLimit:128});
   demo.addHook("onRequest",async(_req,reply)=>{reply.header("Cache-Control","no-store");});
@@ -136,12 +163,13 @@ async function start() {
   } catch(cause) {
     clearInterval(interval);
     await Promise.allSettled(servers.map((server)=>server.close()));
-    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end()]);
+    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end(),issuerPool.end()]);
+    native.stop();
     throw cause;
   }
-  console.log("Synthetic-only loopback APIs ready (portal 5183, response 5184, demo auth 5185). No real participants.");
+  console.log("Synthetic-only loopback APIs ready (portal 5183, response 5184, demo auth 5185, native signer 5186). No real participants.");
   const stop=async()=>{clearInterval(interval);await Promise.allSettled(servers.map((server)=>server.close()));
-    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end()]);process.exit(0);};
+    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end(),issuerPool.end()]);native.stop();process.exit(0);};
   process.once("SIGINT",()=>{void stop();});process.once("SIGTERM",()=>{void stop();});
 }
 await start();

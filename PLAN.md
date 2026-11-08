@@ -42,7 +42,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | 0. Foundation | complete (with recorded caveats) | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
 | 1. Feasibility | complete for synthetic development; 1.4 external checks blocked (release prerequisites) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | complete for synthetic development; production auth/operations deferred to 6 | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
-| 3. Anonymous issuance | in progress (server issuance done; browser handoff not started) | 2 | One durable blind claim per entitlement and reliable browser handoff. |
+| 3. Anonymous issuance | complete for synthetic development; signer provisioning and request budget deferred to 6 | 2 | One durable blind claim per entitlement and reliable browser handoff. |
 | 4. Anonymous redemption | not started | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
 | 5. Results | not started | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
 | 6. Production boundaries | not started | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
@@ -232,7 +232,7 @@ None of the "stop and revise SPEC.md" conditions occurred. **Recommendation: go 
 5. Signer service-credential provisioning and rotation (Milestone 3/6). The issuer-side `0 < m < n` check before claim consumption now exists and is tested (Milestone 3, slice 1).
 6. CI executed on a real remote. `.github/workflows/ci.yml` has never run (0.3).
 7. Production CSP/header set and HSTS from deployment (Milestone 6). Dev servers set only COOP, XFO, Referrer-Policy, and nosniff (1.3).
-8. Synthetic spike poll IDs removed from both apps (Milestones 2–3).
+8. ~~Synthetic spike poll IDs removed from both apps.~~ Done in Milestone 3 slice 3: both apps and all browser tests use the public-poll/claim-context APIs (stubbed in `tests/browser`, real in `tests/demo-browser`).
 9. A test harness for non-`linux-64` platforms, if they're needed (1.2).
 
 ## 4. Later milestones — scoped outcomes and exit gates
@@ -325,18 +325,49 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
   - Assertions: 201 with `{blindSignature}` only, finalized and verified through `claim-context` keys; repeat 409; 413; 400/404/410/403; unhealthy signer 503 `capacity_unavailable` with nothing consumed; sign failure 503 `claim_consumed_no_credential`; a sixth attempt 429; error bodies echo no email or blinded value.
 - Broader checks after slice 2: `npm run typecheck`, `npm run build`, unit 123/123, signer 31/31, DB 30/30, browser 28/28, and `FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only npm run test:demo-browser` 4/4 all passed. `npm audit` **could not run**: the audit endpoint returned an error (network). This slice added no dependencies.
 
-**Still open for the Milestone 3 exit:**
+**Slice 3 (browser credential state and bridge claim, 2026-11-08):**
 
-- the response-origin IndexedDB state machine (`prepared`/`claim_sent`/`usable`/`claim_uncertain`) with Web Locks and read-back;
-- bridge `claim_request`/`claim_result`/`stored_ack`, the 2-minute same-result resend, `not_attempted`, and `login_required`;
-- browser failure modes (popup closed mid-claim, reload, storage write failure, concurrent tabs);
-- wiring the demo launcher to a real workerd signer and an issuer login role (the demo has **no** claim route today);
-- end-to-end enforcement of the 10 s request budget for claims;
-- replacing the spike poll IDs;
-- signer credential provisioning;
-- scenario 9 key-restart behavior through the route.
+- **Bridge grammar** (`packages/protocol/src/bridge.ts`): adds `claim_request` (nonce, key ID/version, 384-byte blinded message only), `claim_result` (exactly one of `blindSignature` or a fixed error code), and `stored_ack`.
+  - Response-side policy (`apps/respond/src/claim-policy.ts`): only definitive pre-insert errors return to `prepared`; consumed results are terminal; closed/withdrawn/not-found erase; `temporarily_unavailable` keeps `claim_sent`.
+  - `tests/unit/bridge-claim.test.ts` red: 3 failures (the accept case and both policy tests). Its 15 rejection cases **passed first, vacuously**, because the old parser rejected unknown types. All 5 grammar mutants were then killed: no key-version check, no blinded-length check, no signature check, any error code, no request key-ID check. Green 18/18.
+- **Response origin** (`apps/respond/src/credential-store.ts`, `claim-flow.ts`, `claim-window.ts`, `main.tsx`):
+  - Each IndexedDB transition runs under a per-poll Web Lock, uses one `strict`-durability transaction, and is read back before use. Other tabs get a non-secret BroadcastChannel notice and re-read.
+  - States: `prepared` → `claim_sent` (written before the request leaves) → `usable` (inverse and blinded request erased), or the markers `claim_consumed`/`claim_uncertain`.
+  - The sweep erases unused state when the poll is observed closed, turns a `claim_sent` older than 2 minutes into `claim_uncertain`, and expires markers 7 days after closure. It runs on load, on change, and every 5 s.
+  - Preparation is an explicit **Prepare credential** click, so casual visitors generate no secret.
+- **Portal bridge** (`apps/portal/src/claim-bridge.ts`, `main.tsx`):
+  - It loads claim context and session from the portal API, shows an explicit title/account confirmation, and makes exactly one `POST /claim`.
+  - It resends the same in-memory result every second until `stored_ack` or 2 minutes, then erases it, and closes after `stored_ack`.
+  - Signed out, it completes the handshake but answers `login_required` with no HTTP attempt. Without a session it cannot check the key ID; nothing is at stake because no attempt is made.
+  - Response mapping: a 201 with a malformed body becomes `claim_consumed_no_credential`, a 401 becomes `login_required`, and anything unexpected becomes `temporarily_unavailable`.
+- **Decisions:**
+  - The response sends `stored_ack` after durably recording *any* outcome, so the bridge can close.
+  - A returned signature that fails to verify becomes a terminal `claim_consumed` marker, with no new signing request.
+  - Closing the bridge after `claim_request` leaves `claim_sent` and then `claim_uncertain`, even if no HTTP attempt happened. This is SPEC §8's strict reading.
+- **Spike IDs removed:** `apps/*/src/spike-poll.ts` are deleted. The `tests/browser` specs now use `tests/browser/fixtures/claim-stubs.ts`, which routes the same-origin APIs and signs claims with an OpenSSL raw private operation in Node. Bridge and popup-blocker end states are now `confirming`/`request_sent`.
+- **Browser tests:**
+  - `tests/browser/claim.spec.ts` red: every test failed, because the response page had no claim UI for real poll IDs (`getByTestId('capabilities')` not found) and the bridge knew only the spike ID. Green: 9/9 in Chromium on the first implementation run; full browser suite 46/46.
+  - **Two weaknesses were found after green and fixed.** The two-tab test compared two reads of the *same* IndexedDB, so an overwriting `prepareIfAbsent` could not fail it; it now drives a stale tab's `prepareCredential` directly. Read-back was untested; a lost-write variant was added.
+  - Browser mutation (Chromium, 12 mutants): **all killed**. They covered the request sent without durable `claim_sent`, no read-back, prepare overwriting, usable keeping the inverse, no stranded-claim sweep, no result-nonce check, a bad signature stored as retry, bridge auto-confirm, a second request allowed, no resend, no request key check, and closing before `stored_ack`.
+  - `tests/browser/claim-interruptions.spec.ts` (bridge closed mid-claim; 401 at POST) was written after implementation and **passed first**, as regression verification.
+- **Real stack:**
+  - `services/portal-api/dev/demo.mjs` now starts the pinned workerd signer on loopback 5186 with a per-run token and a `feedback_demo_issuer` login role, and passes `issuer` to the portal app.
+  - `tests/demo-browser/claim.spec.ts` was written after implementation, so **no red is claimed**. It passed in Chromium and Firefox. The checks: the stored credential verifies by Node PSS under the poll key, the inverse is erased, and no portal session cookie exists for the response origin. The same account in a fresh browser gets `claim_consumed`; the `ineligible` account stays `prepared` with a not-eligible message.
+  - Afterwards there were no orphaned workerd processes or listeners.
+- **Scenario 9 restart:** in `tests/db/claim-api.test.ts`, a new app instance signs with the stored key, and a deleted key file returns 503 `capacity_unavailable`, consumes nothing, and writes no replacement key. It **passed first**, as regression verification.
+- **Final checks on this tree:** `npm run typecheck`, `npm run build`, and `npm run test` passed (unit 141, signer 31, DB 31, browser 52 across Chromium/Firefox), as did `FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only npm run test:demo-browser` (6/6). Milestone 2's split commit `d80150c` was separately verified from a fresh clone: `npm ci`, typecheck, build, unit 119, DB 19.
 
-No credential has been issued in a browser yet, so the Milestone 3 exit gate is **not** met.
+**Milestone 3 exit assessment — complete for synthetic development only (2026-11-08).**
+
+- Every exit item is evidenced. One eligible synthetic account obtains and locally verifies one poll-bound credential through the real issuer and native signer. Unsupported storage and uncertain issuance fail closed. Claim rows hold only `{poll_id,user_id,eligibility_id}`.
+- All four leading tests (concurrent uniqueness, cross-poll blinding, the commit crash windows, and a lost bridge result never re-claiming) pass against real PostgreSQL or real browsers.
+- **Residual, carried to Milestone 6 or release:**
+  - signer service-credential provisioning and rotation, and the container digest;
+  - end-to-end enforcement of the 10 s claim request budget (the issuer preflight query has no statement timeout, and the health/sign timeouts are caller-configured);
+  - a response tab closed mid-claim is not explicitly tested (the bridge expires its result after 2 minutes);
+  - no handshake timeout while waiting for `bridge_ready`/`bridge_ack` (the window-closed poll is the only exit);
+  - production OIDC/session for `login_required`.
+- The Milestone 4 gate has **not** been attempted. No answers can be submitted.
 
 ### Milestone 4 — Anonymous redemption
 
@@ -369,21 +400,21 @@ The numbers below refer to `SPEC.md` §17. A row assigns the **primary milestone
 | Scenario | Primary milestone | Required evidence |
 | --- | --- | --- |
 | 1 | 6 | Real OIDC signature/claim/nonce/domain failures and successful institutional login. |
-| 2 | 3 | Stable subject and both account/email-entry claim constraints; session behavior from 6. |
+| 2 | 3 | Stable subject and both account/email-entry claim constraints; session behavior from 6. Observed: `tests/db/claim.test.ts` (renamed account, reassigned address, stale session email). |
 | 3 | 2 | Organiser ownership and role checks, revisited under production OIDC in 6. |
 | 4 | 6 | Real session/CSRF/origin tests and production demo-auth exclusion. |
 | 5 | 1 | RFC suite/encoding vectors, native signing, browser/server interoperation. |
 | 6 | 4 | Distinct keys and attempted hidden cross-poll issuance/redeem; key-isolation proof begins in 3. |
 | 7 | 4 | Malformed credentials/messages/answers cannot create a response. |
-| 8 | 3 | Concurrent claim and crash-window database/signer tests. |
-| 9 | 3 | Draft/closed/expired/withdrawn issuance rejection and key restart behavior. |
+| 8 | 3 | Concurrent claim and crash-window database/signer tests. Observed: `tests/db/claim.test.ts` (8-way and shared-entry races, lost commit ack, killed backend, post-commit signer failure/fault), `tests/browser/claim.spec.ts` (lost bridge result never re-claims). |
+| 9 | 3 | Draft/closed/expired/withdrawn issuance rejection and key restart behavior. Observed: `tests/db/claim.test.ts` (state rejections, lock-wait race), `tests/db/claim-api.test.ts` (restart keeps key; missing key fails closed, no regeneration). |
 | 10 | 4 | Parallel identical/different-answer redemption and nullifier uniqueness. |
 | 11 | 4 | Server answer validation, normalization, and idempotency. |
 | 12 | 4 | Lost-acknowledgment and deadline-crossing retry semantics. |
 | 13 | 4 | Real DB claim/submit/close race; results finalization completed and rechecked in 5. |
 | 14 | 2 | Draft revision/freeze and open/edit race with DB roles. |
 | 15 | 1 | Real-browser cookie and hostname isolation captures. |
-| 16 | 3 | Full bridge/store failure modes; basic handoff proof begins in 1. |
+| 16 | 3 | Full bridge/store failure modes; basic handoff proof begins in 1. Observed: `tests/browser/{bridge,claim,claim-interruptions,popup-blocker}.spec.ts`; a response tab closed mid-claim is not yet covered. |
 | 17 | 4 | Browser prepared/usable/pending/terminal cleanup and no-secret transport checks. |
 | 18 | 5 | Malicious organiser/answer content, CSP, opener, and rendering checks; safe rendering starts in 2. |
 | 19 | 6 | Persistence and real ingress/app/native signer/error log review; enforce safe defaults from 1 onward. |

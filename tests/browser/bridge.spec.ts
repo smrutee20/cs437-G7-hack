@@ -1,19 +1,27 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { localOrigins } from "../../packages/config/src/local-dev.js";
-import { SPIKE_POLL } from "../../apps/respond/src/spike-poll";
+import { stubApis, syntheticPoll } from "./fixtures/claim-stubs";
 
 const origins = localOrigins();
 const portal = origins.portal.origin;
 const respond = origins.respond.origin;
-const { pollId, keyId } = SPIKE_POLL;
+const poll = syntheticPoll();
+const { pollId, keyId } = poll;
 const otherId = "9b2f4c1e-7d3a-4e8b-a1c2-5f6e7d8c9b0a";
 const pollPage = `${respond}/p/${pollId}`;
 const bridgeUrl = `${portal}/claim-bridge?pollId=${pollId}`;
 const STUB = "<!doctype html><meta charset=utf-8><title>stub</title><body>stub</body>";
 
-async function openFromResponse(page: Page) {
+test.beforeEach(async ({ context }) => { await stubApis(context, poll); });
+
+async function prepare(page: Page) {
   await page.goto(pollPage);
   await expect(page.getByTestId("capabilities")).toHaveAttribute("data-state", "supported");
+  await page.getByRole("button", { name: "Prepare credential" }).click();
+  await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
+}
+async function openFromResponse(page: Page) {
+  await prepare(page);
   const [popup] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Open claim window" }).click()]);
   return popup;
 }
@@ -35,8 +43,8 @@ test("a click opens the portal bridge with its opener kept and completes the han
     if (response.request().resourceType() === "document") coop.push(response.headers()["cross-origin-opener-policy"] ?? "absent");
   });
   const popup = await openFromResponse(page);
-  await expect(popup.getByTestId("bridge")).toHaveAttribute("data-state", "connected");
-  await expect(page.getByTestId("claim-window")).toHaveAttribute("data-state", "connected");
+  await expect(popup.getByTestId("bridge")).toHaveAttribute("data-state", "confirming");
+  await expect(page.getByTestId("claim-window")).toHaveAttribute("data-state", "request_sent");
   const url = new URL(popup.url());
   expect({ origin: url.origin, pathname: url.pathname, search: url.search }).toEqual({ origin: portal, pathname: "/claim-bridge", search: `?pollId=${pollId}` });
   expect(await popup.evaluate(() => window.opener !== null)).toBe(true);
@@ -56,7 +64,7 @@ test("a blocked popup gives a recoverable instruction and opens nothing", async 
   await page.addInitScript(() => {
     window.open = () => null;
   });
-  await page.goto(pollPage);
+  await prepare(page);
   await page.getByRole("button", { name: "Open claim window" }).click();
   await expect(page.getByTestId("claim-window")).toHaveAttribute("data-state", "popup_blocked");
   await expect(page.getByTestId("claim-window")).toContainText("Allow pop-ups");
@@ -73,7 +81,7 @@ for (const [feature, disable] of [
     await page.goto(pollPage);
     await expect(page.getByTestId("capabilities")).toHaveAttribute("data-state", "unsupported");
     await expect(page.getByTestId("capabilities")).toContainText(feature);
-    await expect(page.getByRole("button", { name: "Open claim window" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Open claim window|Prepare credential/ })).toHaveCount(0);
   });
 }
 
@@ -116,7 +124,7 @@ test("the response page accepts only the opened portal window, exact origin, and
   await expect(status).toHaveAttribute("data-rejected", "9");
   await expect(status).toHaveAttribute("data-state", "waiting_ack");
   await send({ version: 1, type: "bridge_ack", pollId, channelNonce: init.data.channelNonce });
-  await expect(status).toHaveAttribute("data-state", "connected");
+  await expect(status).toHaveAttribute("data-state", "request_sent");
 });
 
 test("the bridge accepts one init only from its opener at the response origin, for its own poll and key", async ({ page, context }) => {
@@ -175,7 +183,7 @@ test("the bridge accepts one init only from its opener at the response origin, f
 
 test("reloading a connected bridge closes the channel instead of silently reconnecting", async ({ page }) => {
   const popup = await openFromResponse(page);
-  await expect(page.getByTestId("claim-window")).toHaveAttribute("data-state", "connected");
+  await expect(page.getByTestId("claim-window")).toHaveAttribute("data-state", "request_sent");
   await popup.reload();
   await expect(page.getByTestId("claim-window")).toHaveAttribute("data-state", "connection_lost");
   await expect(popup.getByTestId("bridge")).toHaveAttribute("data-state", "waiting_init");

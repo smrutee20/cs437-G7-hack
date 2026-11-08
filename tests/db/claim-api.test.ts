@@ -2,7 +2,7 @@
 // The signer double is an independent OpenSSL raw operation; the real signer
 // client is exercised against workerd in tests/signer/signer-client.test.ts.
 import { createPrivateKey, randomBytes, randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "pg";
@@ -17,15 +17,17 @@ import { nodeRawSign } from "../fixtures/rsa";
 
 const url = inject("testDatabaseUrl"), origin = "https://portal.feedback.test:4173";
 const observer = new Client({ connectionString: url });
-const people = ["owner", "alice", "bob", "carol", "dave", "erin"] as const;
+const people = ["owner", "alice", "bob", "carol", "dave", "erin", "frank", "grace"] as const;
 type Person = typeof people[number];
 const ids = Object.fromEntries(people.map((name) => [name, randomUUID()])) as Record<Person, string>;
 const email = (name: Person) => ({ owner: "owner@iitgn.ac.in", alice: "student0@iitgn.ac.in", bob: "student1@iitgn.ac.in",
-  carol: "unlisted@iitgn.ac.in", dave: "student2@iitgn.ac.in", erin: "student3@iitgn.ac.in" })[name];
+  carol: "unlisted@iitgn.ac.in", dave: "student2@iitgn.ac.in", erin: "student3@iitgn.ac.in",
+  frank: "student4@iitgn.ac.in", grace: "student5@iitgn.ac.in" })[name];
 const sessions = new Map(people.map((name) => [name,
   { id: ids[name], email: email(name), isOrganiser: name === "owner", csrfToken: `${name}-csrf` }]));
 const signer = { healthy: true, fail: false, signs: 0 };
-let directory: string, app: ReturnType<typeof createApp>;
+const master = randomBytes(32);
+let directory: string, app: ReturnType<typeof createApp>, makeApp: () => ReturnType<typeof createApp>;
 
 beforeAll(async () => {
   await migrateFoundation(url);
@@ -41,8 +43,8 @@ beforeAll(async () => {
     await client.query(`SET ROLE ${role}`);
     return { client, release: () => client.end() };
   };
-  app = createApp({
-    origin, keyDirectory: directory, encryptionKey: randomBytes(32), cursorKey: randomBytes(32),
+  makeApp = () => createApp({
+    origin, keyDirectory: directory, encryptionKey: master, cursorKey: randomBytes(32),
     authenticate: async (request) =>
       sessions.get(/(?:^|; )__Host-session=([^;]+)/.exec(request.headers.cookie ?? "")?.[1] as Person) ?? null,
     acquireClient: connect("feedback_portal_admin"),
@@ -58,6 +60,7 @@ beforeAll(async () => {
       },
     },
   });
+  app = makeApp();
 });
 afterAll(async () => {
   await app?.close();
@@ -163,4 +166,30 @@ test("an account's sixth claim attempt within a minute is refused with an intege
   expect(limited.headers["retry-after"]).toMatch(/^[1-9][0-9]*$/);
   // Another account is unaffected.
   expect((await send("bob", "POST", `/polls/${pollId}/claim`, (await blindRequest("bob", pollId)).body)).statusCode).toBe(201);
+});
+
+test("a restarted issuer keeps signing with the stored poll key; a missing key fails closed and is never regenerated", async () => {
+  const pollId = await openPoll(), lostId = await openPoll();
+  const attempt = await blindRequest("frank", pollId);
+  const restarted = makeApp(); // a new process with the same key store and database
+  try {
+    const issued = await restarted.inject({ method: "POST", url: `/api/v1/polls/${pollId}/claim`, payload: JSON.stringify(attempt.body),
+      headers: { cookie: "__Host-session=frank", origin, "x-csrf-token": "frank-csrf", "content-type": "application/json" } });
+    expect(issued.statusCode).toBe(201);
+    const signature = await finalizeSignature(attempt.key, attempt.prepared,
+      Buffer.from(issued.json().blindSignature, "base64url"), attempt.inverse);
+    expect(await verifySignature(attempt.key, attempt.prepared, signature)).toBe(true);
+
+    const key = (await observer.query("SELECT key_id, public_jwk, private_secret_ref FROM signing_keys WHERE poll_id=$1", [lostId])).rows[0];
+    await rm(join(directory, key.private_secret_ref));
+    const files = (await readdir(directory)).sort();
+    const lost = await restarted.inject({ method: "POST", url: `/api/v1/polls/${lostId}/claim`,
+      payload: JSON.stringify((await blindRequest("grace", lostId)).body),
+      headers: { cookie: "__Host-session=grace", origin, "x-csrf-token": "grace-csrf", "content-type": "application/json" } });
+    expect([lost.statusCode, lost.json().error.code]).toEqual([503, "capacity_unavailable"]);
+    expect(await claims(lostId)).toBe(0);
+    expect((await readdir(directory)).sort()).toEqual(files); // no replacement key written
+    expect((await observer.query("SELECT key_id, public_jwk FROM signing_keys WHERE poll_id=$1", [lostId])).rows[0])
+      .toEqual({ key_id: key.key_id, public_jwk: key.public_jwk });
+  } finally { await restarted.close(); }
 });

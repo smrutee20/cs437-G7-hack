@@ -45,8 +45,8 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | 3. Anonymous issuance | complete for synthetic development; signer provisioning and request budget deferred to 6 | 2 | One durable blind claim per entitlement and reliable browser handoff. |
 | 4. Anonymous redemption | complete for synthetic development; log review and draft persistence deferred | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
 | 5. Results | complete for synthetic development; results-withdrawal journal and operations deferred to 6 | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
-| 6. Production boundaries | in progress (synthetic/local evidence only) | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
-| 7. Demo and release review | not started | 6 for real release; 5 for synthetic demo | Complete walkthrough and independently checked acceptance evidence. |
+| 6. Production boundaries | complete for local/synthetic evidence; real-participant gates blocked (external) | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
+| 7. Demo and release review | complete for the synthetic demo; real-participant release blocked | 6 for real release; 5 for synthetic demo | Complete walkthrough and independently checked acceptance evidence. |
 
 ## 2. Milestone 0 — Foundation (detailed)
 
@@ -679,6 +679,43 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 - **Broader checks:** typecheck, build plus gate, unit 176, DB 78 (+1 skipped diagnostic dump).
 - **Not established:** proxy, CDN, WAF or crash-reporter configuration on real hosting; core dumps and swap (deployment documentation follows).
 
+**Slice 6 (per-route CSRF, operator migrate, runbook, 2026-11-08):**
+
+- `tests/db/csrf-routes.test.ts` covers every mutation route (create, update, open, close, delete, claim, logout) against five variants: wrong or missing CSRF, and foreign, missing or lookalike Origin. All give `403 csrf_failed` and change nothing. It **passed first** (one shared guard); removing the CSRF comparison kills it.
+- `npm run ops -- migrate` applies migrations with the deployment-only owner credential.
+- [`docs/deployment.md`](docs/deployment.md) is the operator runbook: topology and roles, fail-closed startup, database logging settings, secrets, host hardening, ingress/CDN/WAF requirements, operations, the backup/restore procedure, and the release checklist with honest statuses.
+- The production entrypoints were smoke-tested as processes. With no or unsafe configuration they exit 1 with a single `SETUP ERROR` naming settings only; a database password in the environment never appeared.
+
+**Milestone 6 exit assessment: complete for local/synthetic evidence; real-participant gates blocked (2026-11-08).**
+
+- All six leading tests have local evidence:
+  - correct email suffix without a signed `hd` fails (`oidc.test.ts`);
+  - every organiser mutation needs identity, Origin and CSRF (`csrf-routes.test.ts`);
+  - forbidden roles cannot read raw response or identity tables (`privileges.test.ts`);
+  - restored open polls cannot resume, and withdrawn or expired data cannot reappear (`operations.test.ts`, on a real database copy);
+  - error paths log no participant data (`logging.test.ts`).
+- The production-like topology (built bundles, production headers and CSP, per-role logins, journal, scheduled jobs) runs locally and in `test:demo-browser`.
+- **Blocked, each with the reason in `docs/deployment.md` §9:**
+  - the institutional OAuth client and real `email`/`hd` claims;
+  - approved hosting, ingress, CDN and WAF logging;
+  - durable production storage, encrypted backups and key store;
+  - the signer container digest and security sign-off on the unblinded constant-time private operation;
+  - signer credential rotation;
+  - CI on a real remote.
+- Carried residuals now closed: draft persistence, observed-closure UI, the issuer preflight timeout, production CSP and headers, retention and key destruction, withdrawal journal and recovery.
+
+**Milestone 7 exit assessment: complete for the synthetic demo; real-participant release blocked (2026-11-08).**
+
+- [`docs/release-review.md`](docs/release-review.md) maps all 27 SPEC.md §17 scenarios to their tests and status: 26 have local evidence, and scenario 1's real-login half is blocked.
+- Scenario 27 (ten eligible plus one ineligible, five responses with aggregates and qualifying text, a withheld four-response poll, hostile text inert) runs on the **production bundles under the enforced CSP** in Chromium and Firefox.
+- **Final run on this tree:**
+  - typecheck and build, with the bundle gate passing;
+  - unit 176, signer 31, DB 79 (+1 skipped diagnostic), browser 68;
+  - redesigned browser flows `--repeat-each=3`: 182/182;
+  - `test:demo-browser` 10/10;
+  - `npm audit`: 0.
+- **Not claimed:** anonymity or eligibility guarantees for any deployment, real-account behaviour, load capacity, or accessibility beyond keyboard and labelling checks.
+
 ### Milestone 7 — Walkthrough and release review
 
 - Run the ten-eligible/five-response demo and four-response withheld demo from `SPEC.md` §17; verify in both supported browsers and review all 27 scenario records, performance limits, recovery drills, network/log captures, and actual API payloads.
@@ -691,10 +728,10 @@ The numbers below refer to `SPEC.md` §17. A row assigns the **primary milestone
 
 | Scenario | Primary milestone | Required evidence |
 | --- | --- | --- |
-| 1 | 6 | Real OIDC signature/claim/nonce/domain failures and successful institutional login. |
+| 1 | 6 | Real OIDC signature/claim/nonce/domain failures and successful institutional login. Observed (local IdP): `tests/db/oidc.test.ts`. Real institutional login: **blocked**. |
 | 2 | 3 | Stable subject and both account/email-entry claim constraints; session behavior from 6. Observed: `tests/db/claim.test.ts` (renamed account, reassigned address, stale session email). |
 | 3 | 2 | Organiser ownership and role checks, revisited under production OIDC in 6. |
-| 4 | 6 | Real session/CSRF/origin tests and production demo-auth exclusion. |
+| 4 | 6 | Real session/CSRF/origin tests and production demo-auth exclusion. Observed: `tests/db/{oidc,csrf-routes,production-server}.test.ts`, `tests/unit/production-config.test.ts`, build bundle gate. |
 | 5 | 1 | RFC suite/encoding vectors, native signing, browser/server interoperation. |
 | 6 | 4 | Distinct keys and attempted hidden cross-poll issuance/redeem; key-isolation proof begins in 3. Observed: `tests/db/redeem.test.ts` (hidden B message signed by A refused at A and B), `tests/db/claim.test.ts`. |
 | 7 | 4 | Malformed credentials/messages/answers cannot create a response. Observed: `tests/db/redeem.test.ts`, `tests/db/respond-api.test.ts`, `tests/unit/answers.test.ts`. |
@@ -714,10 +751,10 @@ The numbers below refer to `SPEC.md` §17. A row assigns the **primary milestone
 | 21 | 5 | Poll/question threshold boundaries and withheld DTOs. Observed: `tests/db/results.test.ts`, `tests/demo-browser/results.spec.ts`. |
 | 22 | 5 | Aggregation, skipped answers, stable independent text order, actual JSON shape. Observed: `tests/db/results.test.ts`, `tests/db/results-api.test.ts`. |
 | 23 | 5 | Immutable policy, withheld permanence, export/filter denial, withdrawal snapshot gating; operations in 6. |
-| 24 | 6 | Overload, limiter privacy, and timeouts. |
-| 25 | 6 | Retention, browser expiry, deletion, and backup schedule. |
-| 26 | 6 | Backup rollback/withdrawal journal/key-loss drills. |
-| 27 | 7 | Full synthetic walkthrough and below-threshold example. Observed (synthetic, local): `tests/demo-browser/results.spec.ts`; the Milestone 7 review is still to do. |
+| 24 | 6 | Overload, limiter privacy, and timeouts. Observed: `tests/unit/{respond-admission,claim-admission,http-bounds}.test.ts`, `tests/db/{respond-api,draft-limits,production-server}.test.ts`; no load test. |
+| 25 | 6 | Retention, browser expiry, deletion, and backup schedule. Observed: `tests/db/operations.test.ts`, `tests/browser/submit.spec.ts`; backup schedule is procedure only (`docs/deployment.md`). |
+| 26 | 6 | Backup rollback/withdrawal journal/key-loss drills. Observed: `tests/db/operations.test.ts` (real database template copy as the stale backup). |
+| 27 | 7 | Full synthetic walkthrough and below-threshold example. Observed (synthetic, local): `tests/demo-browser/results.spec.ts` on the production bundles under CSP; reviewed in `docs/release-review.md`. |
 
 ## 6. First execution decision
 

@@ -1,6 +1,6 @@
 # Design: Feedback Booth
 
-**Status: design reference only.** No app, package, build, typecheck, or test uses this folder yet. [`SPEC.md`](../SPEC.md) controls wherever this document and the spec differ. Per [`PLAN.md`](../PLAN.md), shared UI code is introduced only when the first screen that needs it is built.
+**Status: implemented.** The components and machines below live in [`packages/ui`](../packages/ui) and are used by both apps (Milestone 6, slice 4 in [`PLAN.md`](../PLAN.md)). This folder remains the reference: [`SPEC.md`](../SPEC.md) controls wherever this document and the spec differ.
 
 Interactive mockups: the "Feedback Booth Design" canvas on claude.ai (private to its owner; share it from the page's Share menu). The canvas sources are in [`mockups/`](mockups/).
 

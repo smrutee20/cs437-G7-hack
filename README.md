@@ -1,20 +1,26 @@
 # IITGN Anonymous Feedback & Polls
 
-**Current status: Milestone 2 complete for local synthetic development; Milestones 3–5 (anonymous claim, submission and gated results) complete for synthetic accounts; Milestone 6 (production boundaries) has not started. Not ready for participants or deployment.** The demo login uses invented accounts only. There is no production authentication, deployment hardening, or retention/recovery operations. The native signer is a feasibility proof, not a deployed service. Nothing here establishes the privacy guarantees in `SPEC.md`.
+**Current status: Milestones 0–7 complete for local synthetic development; not approved for real participants.** Production entrypoints, Google OIDC, sessions, retention, withdrawal, backup recovery, least-privilege roles and the Feedback Booth design are implemented and tested on loopback with invented accounts. The real-participant release is **blocked** on external gates: an institutional Google OAuth client, approved hosting with compliant logging, production storage and backups, a signer container digest, and security sign-off. See [`docs/release-review.md`](docs/release-review.md) and [`docs/deployment.md`](docs/deployment.md). Nothing here establishes the privacy guarantees in `SPEC.md` for a deployment.
 
 - [`SPEC.md`](SPEC.md): product, privacy, protocol, and release contract.
 - [`PLAN.md`](PLAN.md): milestone sequence, test-first workflow, and recorded evidence.
+- [`docs/deployment.md`](docs/deployment.md): operator runbook (configuration, roles, ingress, backups, recovery) and the release checklist.
+- [`docs/release-review.md`](docs/release-review.md): the 27 acceptance scenarios mapped to evidence and status.
+- [`design/`](design/): the Feedback Booth design reference the UI implements.
 
 ## Layout
 
 | Path | Purpose |
 | --- | --- |
-| `apps/portal`, `apps/respond` | Separate browser apps: synthetic organiser draft/lifecycle UI and public read-only poll page; legacy claim-bridge spike remains synthetic. |
-| `services/portal-api`, `services/respond-api` | Separate API factories for owner poll lifecycle and public metadata. Portal contains Drizzle migrations, validation, encrypted per-poll key provisioning, and a separate local-only synthetic launcher in `dev/`; no production auth/listener. |
+| `apps/portal`, `apps/respond` | Separate browser apps: portal (sign-in, organiser workspace, results, claim bridge) and response site (anonymous form and booth). The portal also builds a separate `dist-demo` with synthetic sign-in; production builds exclude it. |
+| `packages/ui` | Shared Feedback Booth components: tokens, self-hosted fonts, dot-matrix displays, plates, inputs, Booth and Press machines. CSS Modules only (CSP-safe). |
+| `packages/http` | Production header set and CSP, bundle loader, HTTPS request bounds, response-host ingress stripping, startup checks. |
+| `services/portal-api` | Portal API, OIDC and sessions, issuance, retention, recovery journal, operator CLI (`npm run ops`), production entrypoint `dist/server.js`, Drizzle migrations, local synthetic launcher in `dev/`. |
+| `services/respond-api` | Public submission API and production entrypoint `dist/server.js` (no identity, key or signer access). |
 | `services/signer` | Private native RSA-RAW blind signer for pinned `workerd` (loopback only, no outbound network). |
 | `packages/protocol` | Credential byte encoding, nullifier, canonical base64url (SPEC.md §7), and the client/verifier side of RSABSSA-SHA384-PSS-Randomized. |
-| `packages/config` | Fail-closed portal/response origin-isolation preflight and local dev-server settings. |
-| `tests/unit`, `tests/db`, `tests/browser`, `tests/demo-browser` | Vitest unit, Vitest + real PostgreSQL, origin/crypto Playwright, and synthetic poll workflow Playwright suites. |
+| `packages/config` | Origin-isolation preflight, local dev settings, and the fail-closed production configuration loader. |
+| `tests/unit`, `tests/signer`, `tests/db`, `tests/browser`, `tests/demo-browser` | Vitest unit, native signer, real PostgreSQL, two-origin Playwright, and synthetic end-to-end Playwright on the production bundles. |
 
 ## Local setup
 
@@ -44,9 +50,28 @@ A missing database, certificate, workerd binary, or browser stops with a `SETUP 
 
 The signer tests and browser tests both start `services/signer` in workerd with a random per-run service credential. The signer harness looks for the `linux-64` workerd binary, so other platforms need that path adjusted. npm 12 blocks workerd's postinstall script; it isn't needed, because the pinned platform binary is installed as an ordinary optional dependency.
 
-## Synthetic local organiser demo (not for real accounts)
+## Synthetic local demo (not for real accounts)
 
-After local setup, use **three terminals**. No production OIDC, submission or results are connected. Run `npm run build` first: `demo:api` also starts the pinned native signer on loopback port 5186 with a fresh service credential.
+The easiest way to try it is the built mode. The launcher serves the **production bundles** itself on both HTTPS origins with the production CSP and headers, plus the APIs and the pinned native signer:
+
+```sh
+npm run build
+FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only FEEDBACK_DEMO_SERVE=built node services/portal-api/dev/demo.mjs
+```
+
+Then open `https://portal.feedback.test:4173` (see "Two origins" below for host mapping and trusting the local CA). Add `FEEDBACK_DEMO_EPHEMERAL=1` to use a fresh disposable database for the run, as the test suite does. Without it, the local database persists between runs, and each synthetic organiser is capped at 50 retained polls and ten new polls a day (SPEC.md §14).
+
+Synthetic accounts: `organiser` and `organiser1`–`organiser6`, `student1`–`student40` (`demo-student1@iitgn.ac.in` …), and `ineligible`. These are invented test fixtures, **not** institutional accounts. Never use real identities or eligibility lists, and never deploy the dev launcher. It refuses production mode, other origins, and any database but the local one.
+
+A walkthrough:
+
+1. On the portal, choose **Sign in as organiser** and create a poll with 10+ of the synthetic addresses.
+2. **Open poll**, which asks you to confirm the freeze, and copy the public link.
+3. In another browser profile, sign in on the portal as a participant through the synthetic button (or `fetch("/__demo/login", …)` with another student), then open the public link.
+4. Choose **Prepare my credential**, then **Open claim window**, then **Stamp my envelope** in the portal window. Answer and choose **Submit answers**.
+5. As the organiser, **Close poll** (type `CLOSE`), then **View results**. Fewer than five responses stay permanently withheld.
+
+For UI development, the Vite mode is still available (three terminals):
 
 ```sh
 FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only npm run demo:api
@@ -54,11 +79,11 @@ FEEDBACK_DEMO_API=1 npm run dev -w @iitgn-feedback/portal
 FEEDBACK_DEMO_API=1 npm run dev -w @iitgn-feedback/respond
 ```
 
-Visit the portal URL below and choose **Sign in as organiser**. The launcher accepts only explicitly named synthetic actors (`organiser`, `student1`–`student40`, `ineligible`), binds loopback listeners and the disposable local database, and refuses production mode/other origins. It seeds synthetic identities and separate runtime DB logins. The portal cookie never reaches the response hostname. Import 10–1,000 institutional-format *invented* email addresses; `demo-student1@iitgn.ac.in` through `demo-student40@iitgn.ac.in` are test fixtures, **not** institutional accounts. The preview does not issue a credential or save an answer. Open/close is irreversible.
+The demo keeps its local journal, keys and secrets in `.certs/` (untracked), applies the same journal/database agreement rule as production, and schedules the deadline closer and retention. `npm run test:browser` starts its own Vite servers, so stop any demo first or the ports conflict.
 
-To try a claim, sign in on the portal as a synthetic participant (for example `student1`), open the poll's public link on the response site, choose **Prepare credential**, then **Open claim window** and confirm in the portal window. The credential stays in that browser's IndexedDB. Each account can claim once per poll. Answer the questions and choose **Submit answers**; the response service needs no sign-in and stores only the poll ID, a nullifier and the canonical answers. After closing a poll, the organiser can choose **View results**: fewer than five responses are permanently withheld, and each question needs five answers.
+## Production entrypoints and operations
 
-The demo scheduler materializes deadline closure on startup and every minute. It is not a substitute for production monitoring, recovery, retention, or private-key deletion. Restarting the demo invalidates in-memory sessions; `.certs/demo-*` hold local keys outside Git. Do **not** use real identities, eligibility lists, or deploy the dev launcher. `npm run test:browser` starts independent Vite servers; stop any manually running Vite demo servers before running it or the ports will conflict. The separate demo-browser runner can start its own services when the flag above is supplied.
+`node services/portal-api/dist/server.js` and `node services/respond-api/dist/server.js` read only environment variables and secret files, and refuse to start on any unsafe setting. Try them without configuration to see the checks. `npm run ops -- <migrate|init-journal|check-sync|withdraw|check-keys|provision-organiser|revoke-organiser|retention|recover>` is the operator CLI. Configuration, roles, ingress and logging requirements, backups and the recovery procedure are in [`docs/deployment.md`](docs/deployment.md).
 
 ## Two origins
 

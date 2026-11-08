@@ -2,6 +2,7 @@
 // retention and recovery). Not a network endpoint. Prints counts and poll IDs
 // only, never identities, answers or key material.
 //
+//   node dist/ops-cli.js migrate                         (deployment-only migration-owner credential)
 //   node dist/ops-cli.js init-journal
 //   node dist/ops-cli.js check-sync
 //   node dist/ops-cli.js withdraw <pollId> <reason>
@@ -13,6 +14,7 @@ import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import { Client } from "pg";
 import { assertJournalInSync, readJournal, WITHDRAW_REASONS } from "./journal.js";
+import { migrateFoundation } from "./migrate.js";
 import { findMissingKeys, recoverDeployment, runRetention, setOrganiser, withdrawPoll, type WithdrawReason } from "./operations.js";
 
 function required(name: string): string {
@@ -25,10 +27,15 @@ async function connect(variable: string): Promise<Client> {
   await client.connect();
   return client;
 }
-const usage = () => { throw new Error("usage: ops-cli <init-journal|check-sync|withdraw|check-keys|provision-organiser|revoke-organiser|retention|recover> …"); };
+const usage = () => { throw new Error("usage: ops-cli <migrate|init-journal|check-sync|withdraw|check-keys|provision-organiser|revoke-organiser|retention|recover> …"); };
 
 async function main(argv: string[]): Promise<void> {
   const [command, ...args] = argv;
+  if (command === "migrate") {
+    await migrateFoundation(required("FEEDBACK_MIGRATION_DB_URL"));
+    console.log("migrations applied");
+    return;
+  }
   const journalPath = required("FEEDBACK_JOURNAL_PATH");
   const keyDirectory = () => required("FEEDBACK_KEY_DIRECTORY");
   switch (command) {

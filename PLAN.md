@@ -43,7 +43,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | 1. Feasibility | complete for synthetic development; 1.4 external checks blocked (release prerequisites) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | complete for synthetic development; production auth/operations deferred to 6 | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
 | 3. Anonymous issuance | complete for synthetic development; signer provisioning and request budget deferred to 6 | 2 | One durable blind claim per entitlement and reliable browser handoff. |
-| 4. Anonymous redemption | not started | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
+| 4. Anonymous redemption | in progress (server redemption done; HTTP route and browser submission not started) | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
 | 5. Results | not started | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
 | 6. Production boundaries | not started | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
 | 7. Demo and release review | not started | 6 for real release; 5 for synthetic demo | Complete walkthrough and independently checked acceptance evidence. |
@@ -374,6 +374,44 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 - Add frozen-schema answer validation/canonicalization, public verifier, nullifier insertion with real DB locking/uniqueness, idempotent identical retry, changed-answer conflict, closure/advisory-lock ordering, and browser pending/cleanup behavior.
 - Leading tests: one valid credential creates exactly one row despite parallel submissions; an identical retry after lost acknowledgment and normal closure confirms acceptance; changed answers cannot replace it; close/deadline versus in-flight requests cannot admit a late first response.
 - Exit: the minimal synthetic-account **vertical slice** works across both hostnames, including duplicate, invalid, expired, and retry paths. Response schema and logs contain no respondent-level identity linkage.
+
+**Slice 1 (answers and locked redemption, 2026-11-08):**
+
+- **Shared text and answers.** `packages/protocol/src/text.ts` now holds the §7 human-text rule, and the portal's `draft.ts` uses it (the draft unit tests were unchanged and passed). `packages/protocol/src/answers.ts` validates `[{questionId,value}]` against frozen questions. Results are canonical in question order, empty optional text and skipped questions are omitted, and failures carry field paths, never values.
+  - `tests/unit/answers.test.ts` red: 23/23 failed on the stub. One expectation was a **test bug**: an all-digit question ID is unchanged by `toUpperCase()`, so a letter-bearing ID now exercises the non-canonical case.
+  - Green 23/23. All 7 mutants killed: extra fields, fractional ratings, any UUID option, empty text kept, required not enforced, input order kept, duplicates allowed.
+- **Test-runner fix.** The refactor exposed that Vitest resolved `@iitgn-feedback/protocol` to its **stale `dist/` build**, so tests could pass against old code. The unit, DB and signer configs now alias exactly that specifier to `packages/protocol/src/index.ts`. A broader `resolve.conditions` attempt broke `pg` loading (a setup failure, not a red) and was reverted. With `dist/` deleted, unit 164, DB 31 and signer 31 all passed.
+- **Redemption.** `0004_redemption.sql` (forward-only) adds `anonymous.responses(poll_id, nullifier 32 bytes, answers jsonb)` with `PRIMARY KEY(poll_id,nullifier)` and no other column. `anonymous.redeem` is `SECURITY DEFINER`, takes the poll `FOR SHARE`, returns withdrawn when invalidated, and then takes `pg_advisory_xact_lock` on the spec's SHA-256-derived key. Next it looks up the existing row (identical → `replayed`, different → `credential_spent`), checks state and deadline immediately before inserting, and rereads the winner on a conflict. The public role gets only `USAGE` on `anonymous` and `EXECUTE`; it has no table grants.
+- **Service.** `services/respond-api/src/redeem.ts` order:
+  1. Strict framing.
+  2. The `public_polls` key.
+  3. Key ID/version.
+  4. Full signature verification over the 111 bytes, and only then the grammar.
+  5. The nullifier.
+  6. Canonical answers.
+  7. One transaction with 2 s lock/statement timeouts.
+
+  A `COMMIT` failure is retryable (`temporarily_unavailable`) and never reported as success. `tests/db/redeem.test.ts` red: 4 tests failed on the stub, and 2 because the table/function was missing. Green on the first implementation run.
+- **What the tests show:**
+  - the stored row matches a nullifier computed independently in Node;
+  - a reordered, re-spaced identical retry gets 200, before and after closure, while withdrawal gets 410;
+  - another preparation of the same secret replays;
+  - 6-way identical and different-answer races leave one row;
+  - the hidden cross-poll message (signed by A, naming B) is refused at both A and B;
+  - framing errors give 400 `invalid_request`; credential errors give `invalid_credential`;
+  - a 422 does not spend the credential;
+  - a waiter behind closure or withdrawal is refused;
+  - a retry past the deadline **waits on the advisory lock** for an uncommitted acceptance and gets 200, with the held lock key matching the Node-derived value;
+  - an expired poll still stored as `open` refuses new credentials;
+  - a lost commit acknowledgement is retryable and then confirmed;
+  - the public role cannot read responses, identities or key references.
+- **Mutation:** 12 mutants, 11 killed. Two of the 11 survived the first run and were killed only after test fixes:
+  - the locked withdrawal check was unreached behind the service preflight; a lock-wait withdrawal case now kills it;
+  - commit-failure-as-success had no test; a lost-ack test now kills it.
+
+  **Remaining survivor:** a plain `INSERT` without `ON CONFLICT`. It is equivalent because the advisory lock serializes same-nullifier attempts, so `ON CONFLICT` stays as defense in depth.
+- **Broader checks:** typecheck, build, unit 164/164, DB 38/38.
+- **Not yet done:** the `POST /polls/:id/responses` route (64 KiB bound, Origin rule, global/per-poll limits, the verification queue), and the browser answer form with `submit_pending` and retry cleanup. No response is submitted from a browser yet. **The Milestone 4 exit gate is not met.**
 
 ### Milestone 5 — Gated results
 

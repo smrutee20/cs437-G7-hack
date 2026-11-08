@@ -1,4 +1,4 @@
-import { isCanonicalUuidV4 } from "@iitgn-feedback/protocol";
+import { isCanonicalUuidV4, normalizeHumanText } from "@iitgn-feedback/protocol";
 import { EligibilityError, validateEligibilityEmails } from "./eligibility.js";
 
 export class DraftValidationError extends Error {
@@ -24,18 +24,7 @@ function object(value: unknown, keys: string[], field: string): Record<string, u
 }
 
 function text(value: unknown, field: string, maxCodePoints: number, maxBytes: number, allowEmpty = false): string {
-  if (typeof value !== "string") fail(field);
-  // for..of yields whole scalar values for valid pairs but the surrogate code
-  // point for an unpaired UTF-16 surrogate. Reject before Unicode normalization.
-  for (const scalar of value) {
-    const cp = scalar.codePointAt(0)!;
-    if (cp >= 0xd800 && cp <= 0xdfff) fail(field);
-  }
-  const normalized = value.replace(/\r\n?/g, "\n").normalize("NFC").trim();
-  if ((/[\p{Cc}]/u.test(normalized.replace(/[\n\t]/g, ""))) ||
-      (!allowEmpty && normalized.length === 0) ||
-      [...normalized].length > maxCodePoints || Buffer.byteLength(normalized, "utf8") > maxBytes) fail(field);
-  return normalized;
+  return normalizeHumanText(value, maxCodePoints, maxBytes, allowEmpty) ?? fail(field);
 }
 
 function uuid(value: unknown, field: string, ids: Set<string>): string {

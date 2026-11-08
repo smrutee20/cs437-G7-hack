@@ -5,6 +5,7 @@
     {"idx": 0, "version": "7", "when": 1794000000000, "tag": "0000_poll_foundation", "breakpoints": true},
     {"idx": 1, "version": "7", "when": 1794000000001, "tag": "0001_deadline_closer", "breakpoints": true},
     {"idx": 2, "version": "7", "when": 1794000000002, "tag": "0002_claim_context", "breakpoints": true},
-    {"idx": 3, "version": "7", "when": 1794000000003, "tag": "0003_claim_issuance", "breakpoints": true}
+    {"idx": 3, "version": "7", "when": 1794000000003, "tag": "0003_claim_issuance", "breakpoints": true},
+    {"idx": 4, "version": "7", "when": 1794000000004, "tag": "0004_redemption", "breakpoints": true}
   ]
 }

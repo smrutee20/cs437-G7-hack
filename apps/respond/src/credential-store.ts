@@ -43,18 +43,28 @@ export class StateConflict extends Error {
   constructor(readonly current: CredentialRecord | null) { super("credential state changed"); }
 }
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+// One connection per page, reopened if the browser closes it, rather than an
+// open/close cycle per operation. Storage can still fail (for example a full
+// disk); every caller fails closed when it does.
+let connection: Promise<IDBDatabase> | null = null;
+export function openCredentialDb(): Promise<IDBDatabase> {
+  connection ??= new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: "pollId" });
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => { db.close(); connection = null; };
+      db.onclose = () => { connection = null; };
+      resolve(db);
+    };
     request.onerror = () => reject(request.error);
     request.onblocked = () => reject(new Error("blocked"));
-  });
+  }).catch((error) => { connection = null; throw error; });
+  return connection;
 }
 
 async function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest | void): Promise<T | undefined> {
-  const db = await openDb();
+  const db = await openCredentialDb();
   try {
     return await new Promise<T | undefined>((resolve, reject) => {
       let request: IDBRequest | void;
@@ -69,8 +79,9 @@ async function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => I
         reject(error);
       }
     });
-  } finally {
-    db.close();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "InvalidStateError") connection = null; // closed underneath us
+    throw error;
   }
 }
 

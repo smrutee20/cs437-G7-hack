@@ -1,4 +1,5 @@
 // Response side of the claim bridge (SPEC.md §8 message contract, steps 1–5).
+import { openCredentialDb } from "./credential-store";
 import {
   newChannelNonce, parseBridgeMessage, type BridgeInit, type BridgeMessageType, type ClaimRequest, type ClaimResult,
   type StoredAck,
@@ -142,16 +143,7 @@ export async function missingClaimCapabilities(): Promise<string[]> {
   if (!window.isSecureContext || typeof crypto === "undefined" || !crypto.subtle) missing.push("Web Crypto");
   try {
     if (typeof indexedDB === "undefined" || indexedDB === null) throw new Error();
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("capability-probe", 1);
-      request.onsuccess = () => {
-        request.result.close();
-        indexedDB.deleteDatabase("capability-probe");
-        resolve();
-      };
-      request.onerror = () => reject(request.error);
-      request.onblocked = () => reject(new Error("blocked"));
-    });
+    await openCredentialDb(); // the real store; no throwaway database to create and delete
   } catch {
     missing.push("IndexedDB");
   }

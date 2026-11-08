@@ -204,12 +204,12 @@ describe("signer input, range, key-policy, and access rejection", () => {
   });
 
   test("enforces the 16 KiB limit on a chunked body with no Content-Length", async () => {
-    const chunk = new TextEncoder().encode("A".repeat(4096));
-    let sent = 0;
+    // Stream a single oversized chunk: the server can reject it without racing
+    // the client's remaining writes (which otherwise surface as an EPIPE).
     const stream = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        if (sent++ < 6) controller.enqueue(chunk);
-        else controller.close();
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("A".repeat(16 * 1024 + 1)));
+        controller.close();
       },
     });
     const response = await fetch(`${url}/blind-sign`, {

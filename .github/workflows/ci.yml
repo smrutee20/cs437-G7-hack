@@ -43,6 +43,7 @@ jobs:
         with: { node-version-file: .nvmrc, cache: npm }
       - run: npm ci --no-audit --no-fund
       - run: docker compose up -d --wait postgres
+      - run: scripts/create-dev-certs.sh
       - run: npm run test:db
       - if: always()
         run: docker compose down -v

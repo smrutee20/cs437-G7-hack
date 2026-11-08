@@ -64,7 +64,7 @@ beforeAll(async () => {
   signerUrl = `http://127.0.0.1:${(signer.address() as { port: number }).port}`;
 });
 afterAll(async () => {
-  await new Promise((done) => signer?.close(done));
+  if (signer) await new Promise((done) => signer.close(done));
   await rollbackFoundation(url);
   const admin = new Client({ connectionString: url });
   await admin.connect();

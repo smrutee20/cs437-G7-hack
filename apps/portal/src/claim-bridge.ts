@@ -15,7 +15,9 @@ export type BridgeContext =
   | { kind: "login_required" }
   | { kind: "unknown" };
 export type ClaimHttpOutcome = { blindSignature: string } | { error: ClaimResultError };
-export type BridgeView = { state: BridgeState; rejected: number; signedIn: boolean; title?: string; email?: string };
+export type BridgeView = { state: BridgeState; rejected: number; signedIn: boolean; title?: string; email?: string;
+  /** What the one claim attempt produced, once known: a blind signature, or a documented error code. */
+  outcome?: "signed" | ClaimResultError };
 
 export interface BridgeOptions {
   responseOrigin: string;
@@ -25,6 +27,8 @@ export interface BridgeOptions {
   onChange(view: BridgeView): void;
   resendMs?: number;
   resultWindowMs?: number;
+  /** Delay before closing after stored_ack (lets the stamp finish). State is cleared at once regardless. */
+  closeDelayMs?: () => number;
 }
 export interface BridgeController { cleanup(): void; confirm(): void; cancel(): void }
 
@@ -62,8 +66,9 @@ export function startClaimBridge(options: BridgeOptions): BridgeController {
   let resend: number | undefined, expiry: number | undefined;
   let stopped = false;
 
+  let delivered: BridgeView["outcome"];
   const view = (): BridgeView => ({ state, rejected, signedIn: context.kind === "ready",
-    ...(context.kind === "ready" ? { title: context.title, email: context.email } : {}) });
+    ...(context.kind === "ready" ? { title: context.title, email: context.email } : {}), ...(delivered ? { outcome: delivered } : {}) });
   const set = (next: BridgeState) => { state = next; options.onChange(view()); };
   const reject = () => { rejected++; options.onChange(view()); };
   const clear = () => {
@@ -83,6 +88,7 @@ export function startClaimBridge(options: BridgeOptions): BridgeController {
     }
     pending = null;
     result = message;
+    delivered = "blindSignature" in message ? "signed" : message.error;
     const send = () => { if (result) opener.postMessage(result, options.responseOrigin); };
     send();
     resend = window.setInterval(send, options.resendMs ?? 1000);
@@ -121,7 +127,7 @@ export function startClaimBridge(options: BridgeOptions): BridgeController {
       set("stored");
       stopped = true;
       window.removeEventListener("message", onMessage);
-      window.close();
+      window.setTimeout(() => window.close(), Math.max(0, Math.min(5000, options.closeDelayMs?.() ?? 0)));
     }
   };
 

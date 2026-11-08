@@ -1,0 +1,15 @@
+.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 22px;
+  border-radius: var(--radius-pill); border: 1px solid transparent; font-size: 15px; font-weight: 600; line-height: 1.2;
+  cursor: pointer; transition: filter var(--dur-ui) ease, background-color var(--dur-ui) ease; text-decoration: none;
+}
+.button:hover:not(:disabled) { filter: brightness(1.1); }
+.primary { background: var(--action); border-color: var(--action-border); color: var(--action-text); box-shadow: var(--action-glow); }
+.secondary { background: transparent; border-color: var(--border-strong); color: #e6e6e6; font-weight: 500; }
+.danger { background: var(--danger); border-color: var(--danger-border); color: #ffffff; }
+.quiet { background: transparent; border-color: transparent; color: var(--text-muted); font-weight: 500; min-height: 36px; padding: 0 10px; }
+.quiet:hover:not(:disabled) { color: var(--text); }
+.button:disabled { background: var(--disabled-bg); border-color: var(--disabled-border); color: var(--disabled-text); box-shadow: none; cursor: not-allowed; }
+.quiet:disabled { background: transparent; border-color: transparent; }
+.small { min-height: 38px; padding: 0 16px; font-size: 14px; }
+.block { width: 100%; }

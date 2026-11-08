@@ -9,9 +9,10 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@iitgn-feedback/protocol": "0.1.0",
+    "@iitgn-feedback/ui": "0.1.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "@iitgn-feedback/protocol": "0.1.0"
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

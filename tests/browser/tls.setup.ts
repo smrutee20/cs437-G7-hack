@@ -37,8 +37,8 @@ test("each hostname serves its own app over HTTPS trusted by the local CA", asyn
   const respond = await strictGet(origins.respond.hostname, originPort(origins.respond));
   expect(portal.status).toBe(200);
   expect(respond.status).toBe(200);
-  expect(portal.body).toContain("portal");
-  expect(respond.body).toContain("response");
+  expect(portal.body).toContain("<title>IITGN Feedback · Portal</title>");
+  expect(respond.body).toContain("<title>IITGN Feedback · Respond</title>");
   expect(portal.body).not.toEqual(respond.body);
 });
 

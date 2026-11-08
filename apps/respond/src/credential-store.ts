@@ -4,14 +4,16 @@
 // read back before the caller may act on it. Other tabs get a non-secret
 // notification and re-read.
 
+/** Local draft answers by question ID (§8): kept with prepared/claim_sent/usable state only, never sent anywhere. */
+export type Draft = Record<string, string>;
 export type PreparedRecord = {
   pollId: string; state: "prepared"; keyId: string; keyVersion: 1; closesAt: string;
-  prepared: Uint8Array; blinded: Uint8Array; inverse: Uint8Array;
+  prepared: Uint8Array; blinded: Uint8Array; inverse: Uint8Array; draft?: Draft;
 };
 export type ClaimSentRecord = Omit<PreparedRecord, "state"> & { state: "claim_sent"; sentAt: number };
 export type UsableRecord = {
   pollId: string; state: "usable"; keyId: string; keyVersion: 1; closesAt: string;
-  prepared: Uint8Array; signature: Uint8Array;
+  prepared: Uint8Array; signature: Uint8Array; draft?: Draft;
 };
 /** The credential plus the exact canonical answers being submitted; retries reuse this snapshot. */
 export type SubmitPendingRecord = Omit<UsableRecord, "state"> & {
@@ -150,6 +152,17 @@ export function transition<T extends CredentialRecord | null>(pollId: string, fr
     const result = await next(current);
     await writeVerified(pollId, result);
     return result;
+  });
+}
+
+/** Saves draft answers into a prepared, claim_sent or usable record; any other state ignores them. */
+export function saveDraft(pollId: string, draft: Draft): Promise<void> {
+  return withPollLock(pollId, async () => {
+    const current = await readRecord(pollId);
+    if (!current || !(current.state === "prepared" || current.state === "claim_sent" || current.state === "usable")) return;
+    const { draft: _previous, ...rest } = current;
+    const next = (Object.keys(draft).length ? { ...rest, draft: { ...draft } } : rest) as CredentialRecord;
+    if (!same(current, next)) await writeVerified(pollId, next);
   });
 }
 

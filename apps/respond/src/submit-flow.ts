@@ -12,8 +12,10 @@ export type SubmitOutcome =
 
 /** Freezes the answers with the credential. Fails unless the credential is still usable. */
 export function beginSubmission(pollId: string, answers: CanonicalAnswer[]): Promise<SubmitPendingRecord> {
-  return transition(pollId, ["usable"], (current): SubmitPendingRecord =>
-    ({ ...(current as UsableRecord), state: "submit_pending", answers, uncertain: false }));
+  return transition(pollId, ["usable"], (current): SubmitPendingRecord => {
+    const { draft: _draft, ...usable } = current as UsableRecord; // the frozen canonical answers replace the draft
+    return { ...usable, state: "submit_pending", answers, uncertain: false };
+  });
 }
 
 const payloadOf = (record: SubmitPendingRecord) => JSON.stringify({

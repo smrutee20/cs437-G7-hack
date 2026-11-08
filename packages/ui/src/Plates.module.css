@@ -1,0 +1,14 @@
+.notice { position: relative; border: 1px solid #2e2e2e; border-radius: var(--radius-plate); background: var(--surface-raised); padding: 22px 26px 24px; }
+.screw { position: absolute; width: 5px; height: 5px; border-radius: 50%; border: 1px solid #3d3d3d; }
+.tl { top: 9px; left: 9px; } .tr { top: 9px; right: 9px; } .bl { bottom: 9px; left: 9px; } .br { bottom: 9px; right: 9px; }
+.noticeTitle { display: flex; align-items: center; gap: 8px; font: var(--text-label); letter-spacing: 0.12em; text-transform: uppercase; color: #d4d4d4; }
+.noticeBody { margin-top: 12px; font-size: 15px; line-height: 1.65; color: #e6e6e6; }
+.warning { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--warn-border); background: var(--warn-bg);
+  border-radius: var(--radius-control); padding: 12px 14px; font-size: 14px; line-height: 1.5; color: var(--warn-text); }
+.warning svg { flex: none; margin-top: 2px; }
+.withheld { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+.withheldText { flex: 1 1 260px; font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
+.leds { display: block; max-width: 100%; }
+.led { fill: var(--led-off); }
+.ledsRun .led { animation: chase var(--dur-chase) linear infinite; animation-delay: var(--d, 0s); }
+@keyframes chase { 0%, 100% { fill: var(--led-off); } 40% { fill: #ffffff; } }

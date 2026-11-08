@@ -11,7 +11,9 @@ test("CSV import, owner edit and plain-text question rendering work across both 
   await page.getByLabel("Eligibility emails").fill(`${emails}\r\n"outsider@example.org"`);
   await page.getByLabel("Question 1 prompt").fill("How would you rate it?");
   await page.getByRole("button",{name:"Save draft"}).click();
-  await expect(page.getByRole("alert")).toContainText("validation_failed (rows 12)");
+  // Physical CSV line 12 is named; the address itself is never echoed.
+  await expect(page.getByRole("alert")).toContainText("Eligibility list: fix line 12.");
+  await expect(page.getByRole("alert")).not.toContainText("outsider@example.org");
   await page.getByLabel("Eligibility emails").fill(emails);
   await page.getByRole("button",{name:"Add question"}).click();
   const second=page.getByRole("group",{name:"Question 2"});
@@ -32,8 +34,9 @@ test("CSV import, owner edit and plain-text question rendering work across both 
   await page.getByRole("button",{name:"Save changes"}).click();
   await expect(page.getByText("Draft saved. Revision 2.")).toBeVisible();
   const href=await listing.getByRole("link",{name:"Public poll link"}).getAttribute("href");
-  const dialog=page.waitForEvent("dialog").then((d)=>d.accept());
-  await listing.getByRole("button",{name:"Open poll"}).click();await dialog;
+  await listing.getByRole("button",{name:"Open poll"}).click();
+  await page.getByRole("dialog").getByRole("button",{name:"Open poll"}).click();
+  await expect(page.getByRole("status")).toHaveText("Poll is open.");
   await page.goto(href!);
   await expect(page.getByRole("heading",{name:title})).toBeVisible();
   await expect(page.getByText("Choose one")).toBeVisible();

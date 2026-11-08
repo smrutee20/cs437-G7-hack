@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, open, readFile } from "node:fs/promises";
+import { mkdir, open, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Pool, Client } from "pg";
 import Fastify from "fastify";
@@ -16,6 +16,7 @@ import { assertJournalInSync, readJournal } from "../dist/journal.js";
 import { recoverDeployment, runRetention } from "../dist/operations.js";
 import { createApp as respondApp } from "../../respond-api/dist/index.js";
 import { localOrigins, DEFAULT_LOCAL_ORIGINS } from "../../../packages/config/dist/local-dev.js";
+import { applyRequestBudget, httpsServerFactory, loadBundle, registerFrontend, stripIngressHeaders } from "../../../packages/http/dist/index.js";
 
 const repo = resolve(import.meta.dirname, "../../..");
 const localAdmin = "postgres://feedback_local_admin:feedback_local_only_not_for_production@127.0.0.1:55432/feedback_local";
@@ -29,7 +30,13 @@ if (process.env.FEEDBACK_ENABLE_SYNTHETIC_DEMO !== "yes-synthetic-only" ||
   throw new Error("SETUP ERROR: synthetic demo requires an explicit flag, exact local .test origins and disposable local DB");
 }
 
-const actorNames = ["organiser", ...Array.from({length:40},(_,i)=>`student${i+1}`), "ineligible"];
+// FEEDBACK_DEMO_SERVE=built: this launcher serves the built bundles itself on the two
+// HTTPS origins with the production header set (CSP etc.), instead of Vite proxies.
+const built = process.env.FEEDBACK_DEMO_SERVE === "built";
+// Several synthetic organisers: each is limited to ten new polls a day (SPEC.md §14),
+// so parallel test projects use their own.
+const actorNames = ["organiser", ...Array.from({length:6},(_,i)=>`organiser${i+1}`),
+  ...Array.from({length:40},(_,i)=>`student${i+1}`), "ineligible"];
 
 async function privateBytes(path) {
   try {const bytes=await readFile(path);if(bytes.length!==32) throw new Error("invalid local key");return bytes;}
@@ -64,16 +71,47 @@ async function startSigner(port) {
   return {signer,stop:()=>child.kill("SIGTERM")};
 }
 
+// FEEDBACK_DEMO_EPHEMERAL=1 (automated runs): a fresh disposable database, key
+// directory and journal per run, removed on exit, so repeated runs never pile
+// polls onto one synthetic organiser (who is capped at 50 retained polls).
+const ephemeral = process.env.FEEDBACK_DEMO_EPHEMERAL === "1";
+const runName = ephemeral ? `feedback_demo_run_${Date.now()}_${randomBytes(4).toString("hex")}` : "feedback_local";
+const runDir = resolve(repo, ".certs/demo-runs", runName);
+const dbUrl = ephemeral ? adminUrl.replace(/\/feedback_local$/, `/${runName}`) : adminUrl;
+
+async function prepareEphemeral() {
+  const admin=new Client({connectionString:adminUrl});await admin.connect();
+  try {
+    // Remove leftovers of earlier runs that were killed before cleaning up.
+    for (const {datname} of (await admin.query("SELECT datname FROM pg_database WHERE datname LIKE 'feedback_demo_run_%'")).rows) {
+      await admin.query(`DROP DATABASE IF EXISTS ${datname} WITH (FORCE)`);
+    }
+    await admin.query(`CREATE DATABASE ${runName}`);
+  } finally {await admin.end();}
+  await rm(resolve(repo,".certs/demo-runs"),{recursive:true,force:true});
+  await mkdir(runDir,{recursive:true,mode:0o700});
+  // Lets the synthetic test suite inspect this run's disposable database (synthetic data only).
+  const pointer=await open(resolve(repo,".certs/demo-runs/current-database"),constants.O_WRONLY|constants.O_CREAT|constants.O_TRUNC,0o600);
+  try {await pointer.writeFile(runName);} finally {await pointer.close();}
+}
+async function cleanupEphemeral() {
+  await rm(runDir,{recursive:true,force:true}).catch(()=>{});
+  const admin=new Client({connectionString:adminUrl});
+  try {await admin.connect();await admin.query(`DROP DATABASE IF EXISTS ${runName} WITH (FORCE)`);}
+  catch {/* the next ephemeral run removes leftovers */} finally {await admin.end().catch(()=>{});}
+}
+
 async function start() {
-  const keysDir=resolve(repo,".certs/demo-keys");
+  if (ephemeral) await prepareEphemeral();
+  const keysDir=ephemeral?resolve(runDir,"keys"):resolve(repo,".certs/demo-keys");
   await mkdir(keysDir,{recursive:true,mode:0o700});
   const [master,cursorKey]=await Promise.all([
     privateBytes(resolve(repo,".certs/demo-master.key")),
     privateBytes(resolve(repo,".certs/demo-cursor.key")),
   ]);
-  await migrateFoundation(adminUrl); // bootstrap-only migration owner, never an API pool
-  const journalPath=resolve(repo,".certs/demo-journal.jsonl");
-  const admin=new Client({connectionString:adminUrl});await admin.connect();
+  await migrateFoundation(dbUrl); // bootstrap-only migration owner, never an API pool
+  const journalPath=ephemeral?resolve(runDir,"journal.jsonl"):resolve(repo,".certs/demo-journal.jsonl");
+  const admin=new Client({connectionString:dbUrl});await admin.connect();
   // Same fail-closed startup rule as production: the database must have acknowledged
   // exactly the journal head. A fresh local database starts an empty journal; a
   // wiped or restored one runs the recovery procedure before anything listens.
@@ -110,7 +148,7 @@ async function start() {
       await admin.query(`GRANT ${grant} TO ${role}`);
     }
     for (const name of actorNames) {
-      const organiser=name==="organiser";
+      const organiser=name.startsWith("organiser");
       const email=`demo-${name}@iitgn.ac.in`;
       const {rows}=await admin.query(`INSERT INTO identity.users(id,issuer,subject,email,is_organiser)
         VALUES($1,'https://accounts.google.com',$2,$3,$4)
@@ -119,7 +157,7 @@ async function start() {
       actors.set(name,{subject:`synthetic:${name}`,email});
     }
   } finally {await admin.end();}
-  const url=(role,pass)=>`postgres://${role}:${pass}@127.0.0.1:55432/feedback_local`;
+  const url=(role,pass)=>`postgres://${role}:${pass}@127.0.0.1:55432/${runName}`;
   const portalPool=new Pool({connectionString:url("feedback_demo_portal",password),max:4});
   const publicPool=new Pool({connectionString:url("feedback_demo_respond",publicPassword),max:4});
   const closerPool=new Pool({connectionString:url("feedback_demo_closer",closerPassword),max:1});
@@ -158,14 +196,17 @@ async function start() {
   };
   // Same server-side session store as production; only the synthetic login route below differs.
   const store=createSessionStore(acquire(authPool));
+  const tls=built?{cert:await readFile(resolve(repo,".certs/dev-server.crt")),key:await readFile(resolve(repo,".certs/dev-server.key"))}:null;
   const portal=portalApp({origin:origins.portal.origin,keyDirectory:keysDir,encryptionKey:master,cursorKey,
+    ...(tls?{serverFactory:httpsServerFactory(tls)}:{}),
     authenticate:store.authenticate,acquireClient:acquire(portalPool),
     issuer:{acquireClient:acquire(issuerPool),signer:native.signer},
     auth:{store,acquireClient:acquire(authPool)},journalPath});
-  const respond=respondApp({origin:origins.respond.origin,acquireClient:acquire(publicPool)});
-  const demo=Fastify({logger:false,bodyLimit:128});
-  demo.addHook("onRequest",async(_req,reply)=>{reply.header("Cache-Control","no-store");});
-  demo.post("/__demo/login",async(request,reply)=>{
+  const respond=respondApp({origin:origins.respond.origin,acquireClient:acquire(publicPool),
+    ...(tls?{serverFactory:httpsServerFactory(tls,(request)=>stripIngressHeaders(request.headers))}:{})});
+  const demo=built?portal:Fastify({logger:false,bodyLimit:128});
+  if (!built) demo.addHook("onRequest",async(_req,reply)=>{reply.header("Cache-Control","no-store");});
+  demo.post("/__demo/login",{config:{public:true},bodyLimit:128},async(request,reply)=>{
     if (request.headers.origin!==origins.portal.origin ||
         request.headers["content-type"]?.split(";")[0]!=="application/json" ||
         !request.body || typeof request.body!=="object" || Array.isArray(request.body) ||
@@ -180,11 +221,24 @@ async function start() {
     reply.header("Set-Cookie",hostCookie(SESSION_COOKIE,session.token,session.maxAgeSeconds));
     return reply.code(204).send();
   });
-  const servers=[portal,respond,demo];
+  if (built) {
+    registerFrontend(portal,await loadBundle(resolve(repo,"apps/portal/dist-demo"),{production:false}),[
+      {path:"/",opener:"isolated"},{path:"/signed-in",opener:"isolated"},{path:"/claim-bridge",opener:"bridge"}]);
+    registerFrontend(respond,await loadBundle(resolve(repo,"apps/respond/dist"),{production:true}),[
+      {path:"/",opener:"isolated"},{path:"/p/:pollId",opener:"bridge",accept:(params)=>/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(params.pollId)}]);
+    respond.addHook("onSend",async(_request,reply,payload)=>{reply.removeHeader("Set-Cookie");return payload;});
+    applyRequestBudget(portal);applyRequestBudget(respond);
+  }
+  const servers=built?[portal,respond]:[portal,respond,demo];
   try {
-    await portal.listen({host:"127.0.0.1",port:5183});
-    await respond.listen({host:"127.0.0.1",port:5184});
-    await demo.listen({host:"127.0.0.1",port:5185});
+    if (built) {
+      await portal.listen({host:"127.0.0.1",port:Number(origins.portal.port)});
+      await respond.listen({host:"127.0.0.1",port:Number(origins.respond.port)});
+    } else {
+      await portal.listen({host:"127.0.0.1",port:5183});
+      await respond.listen({host:"127.0.0.1",port:5184});
+      await demo.listen({host:"127.0.0.1",port:5185});
+    }
   } catch(cause) {
     timers.forEach(clearInterval);
     await Promise.allSettled(servers.map((server)=>server.close()));
@@ -192,9 +246,13 @@ async function start() {
     native.stop();
     throw cause;
   }
-  console.log("Synthetic-only loopback APIs ready (portal 5183, response 5184, demo auth 5185, native signer 5186). No real participants.");
+  console.log(built
+    ? `Synthetic-only demo serving built bundles with production headers: ${origins.portal.origin} and ${origins.respond.origin} (native signer 5186). No real participants.`
+    : "Synthetic-only loopback APIs ready (portal 5183, response 5184, demo auth 5185, native signer 5186). No real participants.");
   const stop=async()=>{timers.forEach(clearInterval);await Promise.allSettled(servers.map((server)=>server.close()));
-    await Promise.allSettled(pools.map((pool)=>pool.end()));native.stop();process.exit(0);};
+    await Promise.allSettled(pools.map((pool)=>pool.end()));native.stop();
+    if (ephemeral) await cleanupEphemeral();
+    process.exit(0);};
   process.once("SIGINT",()=>{void stop();});process.once("SIGTERM",()=>{void stop();});
 }
 await start();

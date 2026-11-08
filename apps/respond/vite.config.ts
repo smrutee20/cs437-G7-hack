@@ -6,6 +6,8 @@ import { localDevServer, originDefines } from "../../packages/config/src/local-d
 export default defineConfig(({ command }) => ({
   plugins: [react()],
   define: originDefines(),
+  // No data: URIs (CSP img-src/font-src 'self'); hashed asset names only.
+  build: { assetsInlineLimit: 0, cssCodeSplit: false },
   // Use workspace package sources directly (see packages/protocol "source" export).
   resolve: { conditions: ["source", "module", "browser", "development|production"] },
   // Pre-bundle up front so first use doesn't trigger a dependency-discovery reload.

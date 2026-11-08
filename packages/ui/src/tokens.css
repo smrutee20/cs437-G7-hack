@@ -1,0 +1,95 @@
+:root {
+  color-scheme: dark;
+
+  /* Ground and surfaces */
+  --bg: #111111;
+  --surface: #141414;
+  --surface-raised: #151515;     /* notice plates */
+  --surface-sunken: #0e0e0e;     /* text inputs */
+  --display-bg: #0b0b0b;         /* dot-matrix display windows */
+  --border: #2a2a2a;
+  --border-subtle: #242424;
+  --border-strong: #3a3a3a;
+
+  /* Text */
+  --text: #f2f2f2;
+  --text-secondary: #b5b5b5;
+  --text-muted: #a3a3a3;         /* 7.5:1 */
+  --text-quiet: #8f8f8f;         /* footnotes; 5.7:1 on --surface */
+
+  /* Action (the only call-to-action colour) */
+  --action: #2563eb;             /* white text 5.2:1 */
+  --action-border: #3b74f0;
+  --action-text: #ffffff;
+  --action-glow: 0 8px 28px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --focus-ring: #5b8def;         /* 2px outline, 3px offset */
+  --step-current: #3b82f6;
+
+  /* Disabled */
+  --disabled-bg: #1f1f1f;
+  --disabled-border: #2e2e2e;
+  --disabled-text: #8f8f8f;
+
+  /* Warning plates (disclosures only) */
+  --warn: #f0b14a;
+  --warn-text: #f3cf8f;
+  --warn-border: rgba(240, 177, 74, 0.35);
+  --warn-bg: rgba(240, 177, 74, 0.07);
+
+  /* Danger (irreversible organiser actions only, always behind a typed confirmation) */
+  --danger: #dc2626;
+  --danger-border: #ef5350;
+
+  /* Dot-matrix display. Success is shown by lit dots, never green. */
+  --dot-off: #242424;
+  --dot-off-on-face: #1d1d1d;
+  --dot-dim: #6b6b6b;
+  --dot-lit: #f7f7f7;
+  --dot-glow: 0 0 5px rgba(255, 255, 255, 0.7);
+  --led-off: #343434;
+  --led-lit: #f5f5f5;
+
+  /* Isometric illustration */
+  --iso-stroke: #555555;
+  --iso-top: #1c1c1c;
+  --iso-front: #151515;
+  --iso-side: #111111;
+  --iso-detail: #7a7a7a;
+
+  /* Type: Geist + Geist Mono, self-hosted woff2 (SPEC.md section 14: no remote fonts) */
+  --font-sans: "Geist", "Inter", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --text-display: 600 40px/1.1 var(--font-sans);   /* letter-spacing -0.025em */
+  --text-heading: 600 21px/1.3 var(--font-sans);   /* letter-spacing -0.01em */
+  --text-prompt: 500 19px/1.4 var(--font-sans);
+  --text-body: 400 16px/1.6 var(--font-sans);
+  --text-small: 400 14px/1.6 var(--font-sans);
+  --text-label: 600 12px/1.2 var(--font-sans);     /* uppercase, letter-spacing 0.12–0.16em */
+
+  /* Shape */
+  --radius-pill: 999px;
+  --radius-card: 18px;
+  --radius-rail: 22px;
+  --radius-plate: 16px;
+  --radius-control: 12px;
+  --radius-key: 14px;
+  --control-height: 50px;
+  --key-size: 64px 72px;          /* rating keys: width height */
+
+  /* Motion */
+  --dur-ui: 200ms;               /* 150–250ms for UI feedback */
+  --dur-dot: 280ms;              /* dot light-up transition */
+  --dur-machine: 1000ms;         /* 0.6–1.2s machine moments */
+  --dur-stamp: 2400ms;           /* one-shot stamp sequence in the claim bridge */
+  --dur-chase: 1100ms;           /* LED chase loop, only while waiting */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-ui: 0ms;
+    --dur-dot: 0ms;
+    --dur-machine: 0ms;
+    --dur-stamp: 0ms;
+  }
+}

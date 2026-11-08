@@ -630,6 +630,34 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 - **Broader checks:** typecheck, build, unit 174/174, DB 64/64.
 - **Not established:** a deployed ingress/CDN/WAF honouring §14/§15; a container image and digest; core-dump and swap settings; HSTS preload; a production bundle in a real browser under CSP (next, with the redesigned UI).
 
+**Slice 4 (the Feedback Booth design, built bundles under CSP, draft persistence, 2026-11-08):**
+
+- **Shared UI** (`packages/ui`) from `design/`: tokens, self-hosted Geist/Geist Mono woff2 (OFL; checksums in `src/fonts/README.md`; latin subset only), CSS Modules only.
+  - Components: the 5×7 `DotDisplay` (scramble-then-settle, real text as its accessible name), `StatusPlate`, buttons, `NoticePlate`/`WarningPlate`/`WithheldPlate`, LED `MarqueeLights`, `RatingKeys`/`ChoiceList` (native radios as full-size transparent overlays, keyboard operable), `StepList`, `DotBar`/`DotColumn`.
+  - The isometric `Booth` and `Press` are React SVG with named animated parts. Dynamic values go only through CSSOM custom properties. Reduced motion jumps to final states.
+- **Response site:** the booth panel follows the browser credential state (display `6D 08H` countdown, `SEALED`, `WAIT`, `READY`, `SEND`, `THANKS`, …; dim means idle, lit means something real happened). The privacy notice is a verbatim notice plate. The loss warning shows before claiming, and the identification warning beside every free-text field and before submitting. Answers can be drafted before claiming, and frozen answers stay visible but disabled.
+- **Portal:**
+  - sign-in (the Google link in production; synthetic buttons only in the dev server and the separate `dist-demo` build);
+  - a `/signed-in` page, a poll list with status plates, and the editor with organiser warnings;
+  - in-page dialogs: open confirms the freeze warnings; close and delete need a typed word (red);
+  - dot-matrix results (scramble reveal; exact counts and percentages as text; withheld plates without numbers);
+  - the claim-bridge "issuing desk": badge and title, and the press stamps only **after** "Stamp my envelope". The window close is deferred up to 3 s so the stamp finishes; in-memory state is still cleared at `stored_ack`;
+  - a 404 press that stamps "404".
+- **Spec wording.** The buttons are now "Prepare my credential" (SPEC.md §3) and "Stamp my envelope". Tests were updated deliberately: labels, the typed-confirmation dialogs instead of `window.confirm`, status plates' accessible names, one-decimal percentages, and frozen answers as disabled inputs.
+- **Residuals closed:**
+  - *Draft answers persisted (§8):* `prepared`/`claim_sent`/`usable` records carry `draft`, which is dropped at `submit_pending` and erased on acceptance. `tests/browser/draft.spec.ts` red: `draft` undefined in the record. Green in Chromium and Firefox; it also covers reload restoration, nothing in Web Storage or the URL, and no request before an explicit submit.
+  - *Observed closure now updates the page* (no stale "Prepare" button).
+  - *Bridge view exposes the claim outcome*, so a refusal never shows a stamp.
+- **Two real bugs found by looking at screenshots:** question fieldsets had no accessible name (legend nested in a div; now `aria-labelledby`), and the booth display sat about 15 px low because the inline-flex box was on a text baseline (measured against the display rect in the browser, then fixed).
+- **Demo launcher:**
+  - `FEEDBACK_DEMO_SERVE=built` serves the **production bundles** itself on both HTTPS origins with the production header set.
+  - `FEEDBACK_DEMO_EPHEMERAL=1` uses a fresh disposable database, journal and key directory per run, removed on exit or by the next run.
+  - Six synthetic organisers exist because the new limits are working: the persistent demo DB already held 50 polls for one organiser (cap), and one suite run exceeds ten creations per organiser per day (429).
+  - `playwright.demo.config.ts` now uses built plus ephemeral mode, and CI gains a `demo-browser` job (not executed: no remote).
+- **CSP evidence:** `tests/demo-browser/csp.spec.ts` (Chromium and Firefox, production bundles) runs organiser, response page, claim-bridge popup, submission, 404, close and results with **zero** `securitypolicyviolation` events or page errors. Positive controls on a production page refuse inline `<script>`, string-timer eval, a `style` attribute and a remote image (no completed request). The exact CSP and `COOP: unsafe-none` on the poll page are asserted. The probe was first tried with `eval` inside Playwright's privileged `evaluate`, which bypasses CSP; it was replaced, not counted.
+- **Final checks on this tree:** typecheck; build (the production portal bundle contains no `__demo`, the demo bundle does, and no `data:` URIs); unit 174, signer 31, DB 64, browser 68 (Chromium and Firefox); `test:demo-browser` 10/10.
+- **Not established:** accessibility review with assistive technology, the mobile layout (spec: desktop only), and visual regression baselines.
+
 ### Milestone 7 — Walkthrough and release review
 
 - Run the ten-eligible/five-response demo and four-response withheld demo from `SPEC.md` §17; verify in both supported browsers and review all 27 scenario records, performance limits, recovery drills, network/log captures, and actual API payloads.
@@ -658,8 +686,8 @@ The numbers below refer to `SPEC.md` §17. A row assigns the **primary milestone
 | 14 | 2 | Draft revision/freeze and open/edit race with DB roles. |
 | 15 | 1 | Real-browser cookie and hostname isolation captures. |
 | 16 | 3 | Full bridge/store failure modes; basic handoff proof begins in 1. Observed: `tests/browser/{bridge,claim,claim-interruptions,popup-blocker}.spec.ts`; a response tab closed mid-claim is not yet covered. |
-| 17 | 4 | Browser prepared/usable/pending/terminal cleanup and no-secret transport checks. Observed: `tests/browser/{claim,submit}.spec.ts`; draft-answer persistence not implemented. |
-| 18 | 5 | Malicious organiser/answer content, CSP, opener, and rendering checks; safe rendering starts in 2. |
+| 17 | 4 | Browser prepared/usable/pending/terminal cleanup and no-secret transport checks. Observed: `tests/browser/{claim,submit,draft}.spec.ts` (draft answers persisted in IndexedDB only, erased on acceptance). |
+| 18 | 5 | Malicious organiser/answer content, CSP, opener, and rendering checks; safe rendering starts in 2. Observed: `tests/demo-browser/{results,poll-content,csp}.spec.ts` on the production bundles under the enforced CSP (zero violations; inline script/eval/style attribute/remote image refused). |
 | 19 | 6 | Persistence and real ingress/app/native signer/error log review; enforce safe defaults from 1 onward. |
 | 20 | 6 | Full runtime role/function privilege checks; establish foundational DB roles in 2. |
 | 21 | 5 | Poll/question threshold boundaries and withheld DTOs. Observed: `tests/db/results.test.ts`, `tests/demo-browser/results.spec.ts`. |

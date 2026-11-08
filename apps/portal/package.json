@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit --project tsconfig.json",
-    "build": "vite build"
+    "build": "vite build && vite build --mode demo --outDir dist-demo"
   },
   "dependencies": {
+    "@iitgn-feedback/protocol": "0.1.0",
+    "@iitgn-feedback/ui": "0.1.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "@iitgn-feedback/protocol": "0.1.0"
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

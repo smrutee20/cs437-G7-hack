@@ -1,0 +1,60 @@
+.iso * { vector-effect: non-scaling-stroke; }
+.booth { position: relative; width: 340px; height: 390px; margin: 0 auto; }
+@media (max-width: 440px) { .booth { zoom: 0.84; } }
+.boothSvg { display: block; }
+.face { position: absolute; left: 0; top: 0; transform-origin: 0 0; transform: matrix(0.866, 0.5, 0, 1, 62.1, 103); }
+.faceInner { position: absolute; left: 17px; top: 24.5px; display: flex; }
+.led { fill: var(--led-off); transition: fill 300ms ease; }
+.ledsRun .led { animation: chase var(--dur-chase) linear infinite; animation-delay: var(--d, 0s); }
+.ledsLit .led { fill: var(--led-lit); filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.85)); }
+@keyframes chase { 0%, 100% { fill: var(--led-off); } 40% { fill: #ffffff; } }
+.cardIn { animation: cardIn 1.5s cubic-bezier(0.55, 0, 0.75, 0.2) forwards; }
+@keyframes cardIn { 0%, 30% { transform: translate(0, 0); opacity: 1; } 100% { transform: translate(26px, -15px); opacity: 0; } }
+.litMark { filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.8)); }
+
+.press { display: flex; justify-content: center; }
+.pressSvg { display: block; width: 100%; height: auto; }
+.lever { transform-box: fill-box; transform-origin: 0% 100%; }
+.mark { opacity: 0; }
+.markDot { fill: var(--dot-dim); }
+.stamping .head { animation: stampOnce var(--dur-stamp) ease forwards; }
+.stamping .lever { animation: leverOnce var(--dur-stamp) ease forwards; }
+.stamping .slide { animation: slideOnce var(--dur-stamp) ease forwards; }
+.stamping .mark { animation: markShow var(--dur-stamp) ease forwards; }
+.stamping .markDot { animation: markLit var(--dur-stamp) ease forwards; }
+.stamping .led { animation: chase var(--dur-chase) linear infinite; animation-delay: var(--d, 0s); }
+.stamped .slide { transform: translate(52px, 30px); }
+.stamped .mark { opacity: 1; }
+.stamped .markDot { fill: var(--dot-lit); }
+.stamped .led { fill: var(--led-lit); }
+@keyframes stampOnce { 0%, 12% { transform: translateY(0); } 28%, 36% { transform: translateY(22px); } 50%, 100% { transform: translateY(0); } }
+@keyframes leverOnce { 0% { transform: rotate(0deg); } 20%, 34% { transform: rotate(65deg); } 55%, 100% { transform: rotate(0deg); } }
+@keyframes slideOnce { 0%, 52% { transform: translate(0, 0); } 80%, 100% { transform: translate(52px, 30px); } }
+@keyframes markShow { 0%, 30% { opacity: 0; } 34%, 100% { opacity: 1; } }
+@keyframes markLit { 0%, 80% { fill: var(--dot-dim); } 90%, 100% { fill: var(--dot-lit); } }
+
+.dim404, .lit404 { opacity: 0; }
+.lit404 { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.85)); }
+.loop .head { animation: stamp404 5s ease infinite; }
+.loop .lever { animation: lever404 5s ease infinite; }
+.loop .slide { animation: slide404 5s ease infinite; }
+.loop .dim404 { animation: dim404 5s linear infinite; }
+.loop .lit404 { animation: lit404 5s ease infinite; }
+.loop .led { animation: led404 5s linear infinite; }
+@keyframes stamp404 { 0%, 10% { transform: translateY(0); } 20%, 24% { transform: translateY(22px); } 32%, 100% { transform: translateY(0); } }
+@keyframes lever404 { 0%, 4% { transform: rotate(0deg); } 14%, 24% { transform: rotate(65deg); } 36%, 100% { transform: rotate(0deg); } }
+@keyframes slide404 { 0%, 30% { transform: translate(0, 0); opacity: 1; } 44%, 86% { transform: translate(52px, 30px); opacity: 1; }
+  93% { transform: translate(52px, 30px); opacity: 0; } 94% { transform: translate(0, 0); opacity: 0; } 100% { transform: translate(0, 0); opacity: 1; } }
+@keyframes dim404 { 0%, 20% { opacity: 0; } 22%, 92% { opacity: 1; } 94%, 100% { opacity: 0; } }
+@keyframes lit404 { 0%, 46% { opacity: 0; } 52%, 86% { opacity: 1; } 92%, 100% { opacity: 0; } }
+@keyframes led404 { 0%, 46% { fill: var(--led-off); } 52%, 86% { fill: var(--led-lit); } 92%, 100% { fill: var(--led-off); } }
+@media (prefers-reduced-motion: reduce) {
+  .loop .head, .loop .lever, .loop .slide, .loop .dim404, .loop .lit404, .loop .led { animation: none; }
+  .loop .slide { transform: translate(52px, 30px); }
+  .loop .dim404, .loop .lit404 { opacity: 1; }
+  .loop .led { fill: var(--led-lit); }
+  .stamping .head, .stamping .lever, .stamping .led { animation: none; }
+  .stamping .slide { animation: none; transform: translate(52px, 30px); }
+  .stamping .mark { animation: none; opacity: 1; }
+  .stamping .markDot { animation: none; fill: var(--dot-lit); }
+}

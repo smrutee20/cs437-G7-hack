@@ -23,7 +23,7 @@ test("the browser blocks a popup without a user gesture but allows the click-ini
   await stubApis(context, poll);
   await page.goto(pollPage);
   await expect(page.getByTestId("capabilities")).toHaveAttribute("data-state", "supported");
-  await page.getByRole("button", { name: "Prepare credential" }).click();
+  await page.getByRole("button", { name: "Prepare my credential" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
   const [popup] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Open claim window" }).click()]);
   await expect(popup.getByTestId("bridge")).toHaveAttribute("data-state", "confirming");

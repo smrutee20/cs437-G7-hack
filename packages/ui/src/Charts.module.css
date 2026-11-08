@@ -1,0 +1,6 @@
+.bar { display: grid; grid-template-columns: repeat(var(--cells), 5px); gap: 3px; max-width: 100%; overflow: hidden; }
+.column { display: grid; grid-template-columns: repeat(2, 6px); gap: 3px; }
+.cell { width: 5px; height: 5px; border-radius: 50%; background: var(--dot-off);
+  transition: background-color 350ms ease, box-shadow 350ms ease; transition-delay: var(--d, 0ms); }
+.column .cell { width: 6px; height: 6px; }
+.on { background: var(--dot-lit); box-shadow: 0 0 5px rgba(255, 255, 255, 0.55); }

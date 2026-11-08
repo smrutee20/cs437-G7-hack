@@ -5,7 +5,7 @@ import { respond, stubApis, syntheticPoll, type SyntheticPoll } from "./fixtures
 
 async function prepared(page: Page, poll: SyntheticPoll) {
   await page.goto(`${respond}/p/${poll.pollId}`);
-  await page.getByRole("button", { name: "Prepare credential" }).click();
+  await page.getByRole("button", { name: "Prepare my credential" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
 }
 async function openBridge(page: Page) {
@@ -23,7 +23,7 @@ test("closing the claim window after the request was handed over leaves an uncer
   await expect(page.getByTestId("claim-window")).toHaveAttribute("data-state", "bridge_closed");
   // claim_sent was durable before the bridge had the request, so this browser may not start over.
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_sent");
-  await expect(page.getByRole("button", { name: /Open claim window|Prepare credential/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Open claim window|Prepare my credential/ })).toHaveCount(0);
   expect(calls).toHaveLength(0);
 });
 
@@ -34,7 +34,7 @@ test("a session that expires before the claim POST returns login_required, and n
   });
   await prepared(page, poll);
   const popup = await openBridge(page);
-  await popup.getByRole("button", { name: "Claim credential" }).click();
+  await popup.getByRole("button", { name: "Stamp my envelope" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
   await expect(page.getByTestId("claim-message")).toContainText("Sign in to the portal");
   expect(calls).toHaveLength(1);

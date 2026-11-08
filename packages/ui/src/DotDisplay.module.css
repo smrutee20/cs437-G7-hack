@@ -1,0 +1,11 @@
+.display { display: inline-flex; align-items: flex-end; gap: var(--glyph-gap, 4px); vertical-align: top; line-height: 0; }
+.window { padding: 7px 9px; background: var(--display-bg); border: 1px solid #2e2e2e; border-radius: 8px; }
+.glyph { display: grid; grid-template-columns: repeat(5, var(--dot, 3px)); gap: var(--dot-gap, 1px); }
+.dot {
+  width: var(--dot, 3px); height: var(--dot, 3px); border-radius: 50%; background: var(--dot-off-color, var(--dot-off));
+  transition: background-color var(--dur-dot) ease, box-shadow var(--dur-dot) ease; transition-delay: var(--d, 0ms);
+}
+.dim .on { background: var(--dot-dim); }
+.lit .on { background: var(--dot-lit); box-shadow: var(--dot-glow); }
+.transparentOff { --dot-off-color: transparent; }
+.faceOff { --dot-off-color: var(--dot-off-on-face); }

@@ -30,9 +30,9 @@ async function openPoll(organiser: Page, title: string, questions: unknown[]) {
 async function participate(browser: Browser, account: string, pollId: string, answer: (page: Page) => Promise<void>) {
   const page = await signedIn(browser, account);
   await page.goto(`${respond}/p/${pollId}`);
-  await page.getByRole("button", { name: "Prepare credential" }).click();
+  await page.getByRole("button", { name: "Prepare my credential" }).click();
   const [bridge] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Open claim window" }).click()]);
-  await bridge.getByRole("button", { name: "Claim credential" }).click();
+  await bridge.getByRole("button", { name: "Stamp my envelope" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "usable");
   await answer(page);
   await page.getByRole("button", { name: "Submit answers" }).click();
@@ -42,9 +42,10 @@ async function participate(browser: Browser, account: string, pollId: string, an
 async function closeAndView(organiser: Page, title: string) {
   await organiser.goto(portal);
   const item = organiser.getByRole("listitem").filter({ hasText: title });
-  const dialog = organiser.waitForEvent("dialog").then((d) => d.accept());
   await item.getByRole("button", { name: "Close poll" }).click();
-  await dialog;
+  const dialog = organiser.getByRole("dialog");
+  await dialog.getByLabel("Type CLOSE to confirm").fill("CLOSE");
+  await dialog.getByRole("button", { name: "Close poll now" }).click();
   await expect(organiser.getByRole("status")).toHaveText("Poll is closed.");
   await organiser.getByRole("listitem").filter({ hasText: title }).getByRole("button", { name: "View results" }).click();
   return organiser.getByRole("region", { name: "Results" });
@@ -54,7 +55,7 @@ test("five synthetic responses publish inert aggregate results; four are permane
   test.setTimeout(120_000);
   // Per-project account ranges: projects run in parallel against one launcher and its per-account claim limit.
   const base = test.info().project.name.includes("firefox") ? 20 : 0;
-  const organiser = await signedIn(browser, "organiser");
+  const organiser = await signedIn(browser, test.info().project.name.includes("firefox") ? "organiser2" : "organiser1");
   const choice = { id: randomUUID(), type: "single_choice", prompt: "Which session?", required: true,
     options: [{ id: randomUUID(), label: "Morning" }, { id: randomUUID(), label: "Evening" }] };
   const text = { id: randomUUID(), type: "free_text", prompt: "Anything else?", required: false };
@@ -70,8 +71,8 @@ test("five synthetic responses publish inert aggregate results; four are permane
   }
   const results = await closeAndView(organiser, title);
   await expect(results).toContainText("5 responses");
-  await expect(results).toContainText("Morning: 3 (60%)");
-  await expect(results).toContainText("Evening: 2 (40%)");
+  await expect(results).toContainText("Morning: 3 (60.0%)");
+  await expect(results).toContainText("Evening: 2 (40.0%)");
   // Three texts is below the five-answer question threshold: withheld, with no texts shown.
   await expect(results).toContainText("Withheld: fewer than five answers");
   await expect(results).not.toContainText("evil.example");
@@ -101,8 +102,8 @@ test("five synthetic responses publish inert aggregate results; four are permane
     });
   }
   const small = await closeAndView(organiser, smallTitle);
-  await expect(small.getByText(/permanently withheld/)).toHaveText(
-    "Results are permanently withheld: fewer than five responses were received.");
+  await expect(small.getByText("Results are permanently withheld: fewer than five responses were received.")).toBeVisible();
+  await expect(small.getByRole("img", { name: "Withheld" })).toBeVisible();
   // No numeric count of any kind: neither a "N responses" line nor "N answered".
   await expect(small).not.toContainText(/\b\d+ (responses|answered)\b/);
 });

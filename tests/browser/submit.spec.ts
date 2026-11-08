@@ -82,10 +82,15 @@ test("after an uncertain attempt the exact payload is kept, answers freeze, and 
   await expect(page.getByTestId("submit-message")).toContainText("could not be confirmed");
   await expect(credentialState(page)).toHaveAttribute("data-state", "submit_pending");
   await expect(page.getByRole("button", { name: "Submit answers" })).toHaveCount(0);
-  await expect(page.getByLabel("Anything else?")).toHaveCount(0); // frozen: shown read-only, not editable
+  // Frozen: the exact saved (canonical) answers are shown, and nothing is editable.
+  await expect(page.getByLabel("Anything else?")).toBeDisabled();
+  await expect(page.getByLabel("Anything else?")).toHaveValue("Clear examples");
+  await expect(page.getByRole("group", { name: "Which session?" }).getByLabel("Evening")).toBeChecked();
+  await expect(page.getByRole("group", { name: "Which session?" }).getByLabel("Morning")).toBeDisabled();
   expect(submissions).toHaveLength(1); // no automatic retry
   await page.reload();
   await expect(credentialState(page)).toHaveAttribute("data-state", "submit_pending");
+  await expect(page.getByLabel("Anything else?")).toHaveValue("Clear examples");
   await page.getByRole("button", { name: "Retry submission" }).click();
   await expect(page.getByTestId("submit-message")).toContainText("Too many submissions");
   // A rate limit after an uncertain attempt does not prove that attempt failed.

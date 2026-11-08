@@ -29,6 +29,11 @@ export default async function setup(project: TestProject) {
         "Start it with `docker compose up -d --wait postgres`. This is an environment failure, not a test result.",
     );
   }
+  // Backup copies made by the recovery test are dropped in its finally block; remove any
+  // left behind by an interrupted run so they never accumulate.
+  for (const { datname } of (await admin.query("SELECT datname FROM pg_database WHERE datname LIKE 'feedback_test_%_backup'")).rows) {
+    await admin.query(`DROP DATABASE IF EXISTS ${datname} WITH (FORCE)`);
+  }
   const name = `feedback_test_${Date.now()}_${randomBytes(4).toString("hex")}`;
   await admin.query(`CREATE DATABASE ${name}`);
   await admin.end();

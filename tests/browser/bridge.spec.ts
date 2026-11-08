@@ -17,7 +17,7 @@ test.beforeEach(async ({ context }) => { await stubApis(context, poll); });
 async function prepare(page: Page) {
   await page.goto(pollPage);
   await expect(page.getByTestId("capabilities")).toHaveAttribute("data-state", "supported");
-  await page.getByRole("button", { name: "Prepare credential" }).click();
+  await page.getByRole("button", { name: "Prepare my credential" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
 }
 async function openFromResponse(page: Page) {
@@ -81,7 +81,7 @@ for (const [feature, disable] of [
     await page.goto(pollPage);
     await expect(page.getByTestId("capabilities")).toHaveAttribute("data-state", "unsupported");
     await expect(page.getByTestId("capabilities")).toContainText(feature);
-    await expect(page.getByRole("button", { name: /Open claim window|Prepare credential/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Open claim window|Prepare my credential/ })).toHaveCount(0);
   });
 }
 

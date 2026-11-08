@@ -92,9 +92,9 @@ export async function stubApis(context: BrowserContext, poll: SyntheticPoll, opt
 /** Runs the real claim flow (stubbed portal) until the response page holds a usable credential. */
 export async function claimCredential(page: Page, poll: SyntheticPoll) {
   await page.goto(`${respond}/p/${poll.pollId}`);
-  await page.getByRole("button", { name: "Prepare credential" }).click();
+  await page.getByRole("button", { name: "Prepare my credential" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
   const [popup] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Open claim window" }).click()]);
-  await popup.getByRole("button", { name: "Claim credential" }).click();
+  await popup.getByRole("button", { name: "Stamp my envelope" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "usable");
 }

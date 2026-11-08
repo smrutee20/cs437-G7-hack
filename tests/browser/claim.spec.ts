@@ -31,7 +31,7 @@ const readRecord = (page: Page, pollId: string) => page.evaluate((id) => new Pro
 async function prepared(page: Page, poll: SyntheticPoll) {
   await page.goto(`${respond}/p/${poll.pollId}`);
   await expect(page.getByTestId("capabilities")).toHaveAttribute("data-state", "supported");
-  await page.getByRole("button", { name: "Prepare credential" }).click();
+  await page.getByRole("button", { name: "Prepare my credential" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
 }
 async function openBridge(page: Page) {
@@ -49,14 +49,15 @@ test("an eligible participant obtains, verifies and stores one credential; the b
   const popup = await openBridge(page);
   const bridge = popup.getByTestId("bridge");
   await expect(bridge).toHaveAttribute("data-state", "confirming");
-  await expect(bridge).toContainText(poll.title);
-  await expect(bridge).toContainText(PARTICIPANT);
+  // The confirmation shows the poll title next to the signed-in account (design: the issuing desk).
+  await expect(popup.getByRole("heading", { level: 1 })).toContainText(poll.title);
+  await expect(popup.getByRole("main")).toContainText(PARTICIPANT);
   // claim_sent is durable before the request reaches the bridge, and nothing is claimed before confirmation.
   expect(await readRecord(page, poll.pollId)).toMatchObject({ state: "claim_sent", prepared: before!.prepared });
   expect(calls).toHaveLength(0);
 
   const closed = popup.waitForEvent("close");
-  await popup.getByRole("button", { name: "Claim credential" }).click();
+  await popup.getByRole("button", { name: "Stamp my envelope" }).click();
   await closed;
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "usable");
   expect(calls).toHaveLength(1);
@@ -73,7 +74,7 @@ test("an eligible participant obtains, verifies and stores one credential; the b
   expect(nodeVerifyPss(publicKey, bytes(usable!.prepared), bytes(usable!.signature))).toBe(true);
   expect(parsePreparedMessage(bytes(usable!.prepared), poll.pollId).keyVersion).toBe(1);
   await expect(page.getByRole("button", { name: "Open claim window" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Prepare credential" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Prepare my credential" })).toHaveCount(0);
 });
 
 test("cancelling in the bridge sends nothing to the server and permits an explicit retry", async ({ page, context }) => {
@@ -89,7 +90,7 @@ test("cancelling in the bridge sends nothing to the server and permits an explic
   await expect(page.getByTestId("claim-message")).toContainText("No claim was made");
   expect(calls).toHaveLength(0);
   const second = await openBridge(page);
-  await second.getByRole("button", { name: "Claim credential" }).click();
+  await second.getByRole("button", { name: "Stamp my envelope" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "usable");
   expect(calls).toHaveLength(1);
 });
@@ -113,10 +114,10 @@ test("a consumed entitlement is terminal for this browser and erases the secret"
   });
   await prepared(page, poll);
   const popup = await openBridge(page);
-  await popup.getByRole("button", { name: "Claim credential" }).click();
+  await popup.getByRole("button", { name: "Stamp my envelope" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_consumed");
   expect(Object.keys((await readRecord(page, poll.pollId))!).sort()).toEqual(["closesAt", "pollId", "state"]);
-  await expect(page.getByRole("button", { name: /Open claim window|Prepare credential/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Open claim window|Prepare my credential/ })).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_consumed");
   expect(calls).toHaveLength(1);
@@ -128,10 +129,10 @@ test("an uncertain claim is never retried; after two minutes only a non-secret c
   await page.clock.install();
   await prepared(page, poll);
   const popup = await openBridge(page);
-  await popup.getByRole("button", { name: "Claim credential" }).click();
+  await popup.getByRole("button", { name: "Stamp my envelope" }).click();
   await expect(page.getByTestId("claim-message")).toContainText("outcome of this claim is unknown");
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_sent");
-  await expect(page.getByRole("button", { name: /Open claim window|Prepare credential/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Open claim window|Prepare my credential/ })).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_sent");
   await page.clock.fastForward("02:01");
@@ -157,7 +158,7 @@ for (const failure of ["throws", "is silently lost"] as const) test(`if the clai
   await expect(page.getByTestId("claim-message")).toContainText("could not be saved");
   await expect(popup.getByTestId("bridge")).toHaveAttribute("data-state", "connected");
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
-  await expect(popup.getByRole("button", { name: "Claim credential" })).toHaveCount(0);
+  await expect(popup.getByRole("button", { name: "Stamp my envelope" })).toHaveCount(0);
   expect(calls).toHaveLength(0);
 });
 
@@ -169,7 +170,7 @@ test("two tabs share one prepared credential, never overwrite each other, and se
     await tab.goto(`${respond}/p/${poll.pollId}`);
     await expect(tab.getByTestId("capabilities")).toHaveAttribute("data-state", "supported");
   }
-  await Promise.all([a, b].map((tab) => tab.getByRole("button", { name: "Prepare credential" }).click()));
+  await Promise.all([a, b].map((tab) => tab.getByRole("button", { name: "Prepare my credential" }).click()));
   for (const tab of [a, b]) await expect(tab.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
   const first = await readRecord(a, poll.pollId);
   // A stale tab acting on old UI state must get the existing record back, not replace it.
@@ -181,7 +182,7 @@ test("two tabs share one prepared credential, never overwrite each other, and se
   expect(await stalePrepare(b)).toBe("prepared");
   expect(await readRecord(b, poll.pollId)).toEqual(first);
   const popup = await openBridge(a);
-  await popup.getByRole("button", { name: "Claim credential" }).click();
+  await popup.getByRole("button", { name: "Stamp my envelope" }).click();
   await expect(a.getByTestId("credential")).toHaveAttribute("data-state", "usable");
   await expect(b.getByTestId("credential")).toHaveAttribute("data-state", "usable");
   const usable = await readRecord(a, poll.pollId);
@@ -224,7 +225,7 @@ test("the bridge accepts one valid claim_request, makes one HTTP claim, and rese
   await expect(status).toHaveAttribute("data-state", "confirming");
   await send(request); // a second request on this channel
   await expect(status).toHaveAttribute("data-rejected", "4");
-  await bridge.getByRole("button", { name: "Claim credential" }).click();
+  await bridge.getByRole("button", { name: "Stamp my envelope" }).click();
   await expect.poll(async () => (await messages()).filter((m) => m.type === "claim_result").length, { timeout: 10_000 })
     .toBeGreaterThanOrEqual(2);
   const results = (await messages()).filter((m) => m.type === "claim_result");

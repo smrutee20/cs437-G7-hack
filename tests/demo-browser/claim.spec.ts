@@ -1,5 +1,6 @@
 // Synthetic end-to-end claim: real portal API, feedback_issuer DB role, pinned
 // workerd native signer, both HTTPS origins. Invented accounts only.
+import { readFileSync } from "node:fs";
 import { createPublicKey, randomUUID } from "node:crypto";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { Client } from "pg";
@@ -8,7 +9,9 @@ import { nodeVerifyPss } from "../fixtures/rsa";
 const portal = "https://portal.feedback.test:4173";
 const respond = "https://respond.feedback.test:4174";
 // The demo's disposable local database (same fixed loopback URL as the launcher).
-const localDb = "postgres://feedback_local_admin:feedback_local_only_not_for_production@127.0.0.1:55432/feedback_local";
+// The launcher runs on a fresh disposable database per run and records its name here.
+const runDatabase = () => readFileSync(".certs/demo-runs/current-database", "utf8").trim();
+const localDb = () => `postgres://feedback_local_admin:feedback_local_only_not_for_production@127.0.0.1:55432/${runDatabase()}`;
 
 async function signedIn(browser: Browser, account: string): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -21,7 +24,7 @@ async function signedIn(browser: Browser, account: string): Promise<{ context: B
 }
 
 async function openedPoll(browser: Browser) {
-  const { context, page } = await signedIn(browser, "organiser");
+  const { context, page } = await signedIn(browser, test.info().project.name.includes("firefox") ? "organiser4" : "organiser3");
   try {
     return await page.evaluate(async (draft) => {
       const { csrfToken } = await (await fetch("/api/v1/session")).json();
@@ -41,11 +44,11 @@ async function openedPoll(browser: Browser) {
 
 async function claim(page: Page, pollId: string) {
   await page.goto(`${respond}/p/${pollId}`);
-  await page.getByRole("button", { name: "Prepare credential" }).click();
+  await page.getByRole("button", { name: "Prepare my credential" }).click();
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
   const [bridge] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Open claim window" }).click()]);
   await expect(bridge.getByTestId("bridge")).toHaveAttribute("data-state", "confirming");
-  await bridge.getByRole("button", { name: "Claim credential" }).click();
+  await bridge.getByRole("button", { name: "Stamp my envelope" }).click();
   return bridge;
 }
 
@@ -84,7 +87,7 @@ test("an eligible synthetic participant claims a natively signed credential and 
     await first.page.getByRole("button", { name: "Submit answers" }).click();
     await expect(first.page.getByTestId("credential")).toHaveAttribute("data-state", "accepted");
     expect(Object.keys(await storedCredential(first.page, poll.id)).sort()).toEqual(["closesAt", "pollId", "state"]);
-    const db = new Client({ connectionString: localDb });
+    const db = new Client({ connectionString: localDb() });
     await db.connect();
     try {
       const { rows } = await db.query("SELECT * FROM anonymous.responses WHERE poll_id=$1", [poll.id]);

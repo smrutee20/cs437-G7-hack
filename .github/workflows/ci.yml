@@ -57,3 +57,20 @@ jobs:
       - run: npx playwright install --with-deps chromium firefox
       - run: scripts/create-dev-certs.sh
       - run: npm run test:browser
+
+  # Synthetic end-to-end on the built bundles under the production CSP, with a
+  # disposable database per run. Synthetic accounts only.
+  demo-browser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - run: docker compose up -d --wait postgres
+      - run: npx playwright install --with-deps chromium firefox
+      - run: scripts/create-dev-certs.sh
+      - run: npm run test:demo-browser
+        env: { FEEDBACK_ENABLE_SYNTHETIC_DEMO: yes-synthetic-only }
+      - if: always()
+        run: docker compose down -v

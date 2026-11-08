@@ -7,7 +7,7 @@ import {
 } from "@iitgn-feedback/protocol";
 import { claimErrorEffect } from "./claim-policy";
 import {
-  marker, prepareIfAbsent, transition, type ClaimSentRecord, type CredentialRecord, type PreparedRecord, type UsableRecord,
+  marker, prepareIfAbsent, transition, type ClaimSentRecord, type CredentialRecord, type Draft, type PreparedRecord, type UsableRecord,
 } from "./credential-store";
 
 export type ClaimPoll = { id: string; closesAt: string; key: { keyId: string; publicJwk: unknown } };
@@ -16,7 +16,7 @@ export type ClaimOutcome =
   | { kind: "invalid_signature" }
   | { kind: "retry" | "consumed" | "closed" | "uncertain"; code: ClaimResultError };
 
-export function prepareCredential(poll: ClaimPoll): Promise<CredentialRecord> {
+export function prepareCredential(poll: ClaimPoll, draft: Draft = {}): Promise<CredentialRecord> {
   return prepareIfAbsent(poll.id, async () => {
     const key = await importPollPublicKey(poll.key.publicJwk);
     const secret = crypto.getRandomValues(new Uint8Array(32));
@@ -24,7 +24,7 @@ export function prepareCredential(poll: ClaimPoll): Promise<CredentialRecord> {
     secret.fill(0);
     const { blindedMessage, inverse } = await blindMessage(key, prepared);
     return { pollId: poll.id, state: "prepared", keyId: poll.key.keyId, keyVersion: 1, closesAt: poll.closesAt,
-      prepared, blinded: blindedMessage, inverse };
+      prepared, blinded: blindedMessage, inverse, ...(Object.keys(draft).length ? { draft: { ...draft } } : {}) };
   });
 }
 
@@ -47,7 +47,7 @@ export async function finishClaim(pollId: string, publicJwk: unknown, result: Cl
         const signature = await finalizeSignature(key, sent.prepared, decodeBase64Url(result.blindSignature, 384), sent.inverse);
         outcome = { kind: "usable" };
         const usable: UsableRecord = { pollId, state: "usable", keyId: sent.keyId, keyVersion: 1, closesAt: sent.closesAt,
-          prepared: sent.prepared, signature };
+          prepared: sent.prepared, signature, ...(sent.draft ? { draft: sent.draft } : {}) };
         return usable;
       } catch {
         // The entitlement may be spent; never request another signature for this browser.

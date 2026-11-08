@@ -10,7 +10,6 @@ if(origins.portal.origin!=="https://portal.feedback.test:4173" ||
 }
 localTlsPaths(import.meta.dirname);
 const hosts=[origins.portal.hostname,origins.respond.hostname];
-const reuse=!process.env.CI;
 export default defineConfig({
   testDir:"tests/demo-browser",fullyParallel:false,retries:0,timeout:45_000,
   use:{ignoreHTTPSErrors:true,trace:"off",screenshot:"off",video:"off"},
@@ -18,12 +17,10 @@ export default defineConfig({
     {name:"demo-chromium",use:{...devices["Desktop Chrome"],launchOptions:{args:["--no-proxy-server",`--host-resolver-rules=${hosts.map((host)=>`MAP ${host} 127.0.0.1`).join(",")}`]}}},
     {name:"demo-firefox",use:{...devices["Desktop Firefox"],launchOptions:{firefoxUserPrefs:{"network.dns.localDomains":hosts.join(","),"network.proxy.type":0}}}},
   ],
+  // Production-like topology: the launcher serves the built bundles itself on both HTTPS
+  // origins with the production header set (strict CSP), on a fresh disposable database.
   webServer:[
-    {command:"FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only node services/portal-api/dev/demo.mjs",
-      url:"http://127.0.0.1:5183/api/v1/session",reuseExistingServer:reuse,timeout:30_000},
-    {command:"FEEDBACK_DEMO_API=1 npm run dev -w @iitgn-feedback/portal",
-      url:"https://127.0.0.1:4173",ignoreHTTPSErrors:true,reuseExistingServer:reuse,timeout:30_000},
-    {command:"FEEDBACK_DEMO_API=1 npm run dev -w @iitgn-feedback/respond",
-      url:"https://127.0.0.1:4174",ignoreHTTPSErrors:true,reuseExistingServer:reuse,timeout:30_000},
+    {command:"FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only FEEDBACK_DEMO_SERVE=built FEEDBACK_DEMO_EPHEMERAL=1 node services/portal-api/dev/demo.mjs",
+      url:"https://127.0.0.1:4173",ignoreHTTPSErrors:true,reuseExistingServer:false,timeout:60_000},
   ],
 });

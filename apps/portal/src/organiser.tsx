@@ -101,7 +101,7 @@ export function OrganiserApp() {
     await refreshSession();
   });
   const logout=async()=>perform(async()=>{
-    const response=await fetch("/__demo/logout",{method:"POST",credentials:"same-origin",
+    const response=await fetch("/api/v1/auth/logout",{method:"POST",credentials:"same-origin",
       headers:{"Content-Type":"application/json","X-CSRF-Token":session!.csrfToken},body:"{}"});
     if(!response.ok) throw new Error("Logout unavailable");
     setSession(null);setActive(null);setPolls([]);

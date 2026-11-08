@@ -12,6 +12,8 @@ import { loadPrivateKey } from "./keys.js";
 import { readResults } from "./results.js";
 import { createAccountLimiter } from "./rate-limit.js";
 import type { SignerClient } from "./signer-client.js";
+import { clearedCookie, readTokenCookie, SESSION_COOKIE, type Lease, type SessionStore } from "./auth.js";
+import { registerOidcRoutes, type OidcConfig } from "./oidc.js";
 
 type Session = { id: string; email?: string; isOrganiser: boolean; csrfToken: string };
 type Config = {
@@ -26,6 +28,8 @@ type Config = {
     acquireClient: () => Promise<{client: Client; release: () => Promise<void>}>;
     signer: SignerClient;
   };
+  /** Production sign-in: server-side session store plus Google OIDC routes. */
+  auth?: { store: SessionStore; acquireClient: Lease; oidc?: OidcConfig };
 };
 const CLAIM_STATUS: Record<ClaimErrorCode, number> = {
   invalid_request:400, not_found:404, not_eligible:403, claim_consumed:409, poll_closed:410, poll_withdrawn:410,
@@ -59,6 +63,8 @@ export function createApp(config: Config) {
   const sessions = new WeakMap<FastifyRequest, Session>();
   app.addHook("onRequest",async(_req,reply)=>{reply.header("Cache-Control","no-store");});
   app.addHook("preHandler",async(req,reply)=>{
+    // Only the OIDC login/callback routes are reachable without a session.
+    if ((req.routeOptions.config as {public?:boolean}|undefined)?.public===true) return;
     const session = await config.authenticate(req);
     if (!session) return reply.code(401).send(error("authentication_required"));
     sessions.set(req,session);
@@ -117,6 +123,17 @@ export function createApp(config: Config) {
       policy:{version:1,minEligible:10,minResponses:5,minAnswersPerQuestion:5},
     };
   };
+  if (config.auth) {
+    const auth=config.auth;
+    if (auth.oidc) registerOidcRoutes(app,{oidc:auth.oidc,acquireClient:auth.acquireClient,store:auth.store});
+    // Session + exact Origin + CSRF + JSON already enforced by the preHandler.
+    app.post("/api/v1/auth/logout",async(req,reply)=>{
+      fields(req.body,[]);
+      const token=readTokenCookie(req.headers.cookie,SESSION_COOKIE);
+      if (token) await auth.store.revoke(token);
+      return reply.code(204).header("Set-Cookie",clearedCookie(SESSION_COOKIE)).send();
+    });
+  }
   app.get("/api/v1/session",async(req)=>{
     const session=sessions.get(req)!;
     if (typeof session.email!=="string") throw new ApiError(500,"internal_error");

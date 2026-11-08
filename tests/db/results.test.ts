@@ -142,7 +142,7 @@ test("a ready snapshot is immutable, holds no linkage, and shuffles each free-te
   // two questions' orders differ at least once, and neither simply follows insertion order every time.
   expect(orders.some((order) => order.first.join() !== order.second.join())).toBe(true);
   expect(orders.some((order) => order.first.join() !== insertion.join())).toBe(true);
-});
+}, 60_000); // five 3072-bit key generations; Vitest's 5 s default is a harness limit, not a product budget
 
 test("publication materializes deadline closure and waits for an admitted in-flight response", async () => {
   const choice = choiceQ();

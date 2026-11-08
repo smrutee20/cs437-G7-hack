@@ -11,6 +11,7 @@ import { createApp as portalApp } from "../dist/index.js";
 import { migrateFoundation } from "../dist/migrate.js";
 import { closeExpiredPolls } from "../dist/expiry.js";
 import { createSignerClient } from "../dist/signer-client.js";
+import { createSessionStore, hostCookie, readTokenCookie, SESSION_COOKIE } from "../dist/auth.js";
 import { createApp as respondApp } from "../../respond-api/dist/index.js";
 import { localOrigins, DEFAULT_LOCAL_ORIGINS } from "../../../packages/config/dist/local-dev.js";
 
@@ -27,14 +28,6 @@ if (process.env.FEEDBACK_ENABLE_SYNTHETIC_DEMO !== "yes-synthetic-only" ||
 }
 
 const actorNames = ["organiser", ...Array.from({length:40},(_,i)=>`student${i+1}`), "ineligible"];
-const secrets = new Map();
-const until = () => Date.now()+8*60*60*1000;
-const session = (request) => {
-  const token = /(?:^|; )__Host-session=([A-Za-z0-9_-]+)/.exec(request.headers.cookie??"")?.[1];
-  const state = token && secrets.get(token);
-  if (!state || Date.now()>=state.expiresAt) return null;
-  return state;
-};
 
 async function privateBytes(path) {
   try {const bytes=await readFile(path);if(bytes.length!==32) throw new Error("invalid local key");return bytes;}
@@ -82,6 +75,7 @@ async function start() {
   const publicPassword=randomBytes(32).toString("hex");
   const closerPassword=randomBytes(32).toString("hex");
   const issuerPassword=randomBytes(32).toString("hex");
+  const authPassword=randomBytes(32).toString("hex");
   const actors=new Map();
   try {
     for (const [role,pass,grant] of [
@@ -89,6 +83,7 @@ async function start() {
       ["feedback_demo_respond",publicPassword,"feedback_response_public"],
       ["feedback_demo_closer",closerPassword,"feedback_closer"],
       ["feedback_demo_issuer",issuerPassword,"feedback_issuer"],
+      ["feedback_demo_auth",authPassword,"feedback_auth"],
     ]) {
       await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN
         CREATE ROLE ${role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
@@ -103,7 +98,7 @@ async function start() {
         VALUES($1,'https://accounts.google.com',$2,$3,$4)
         ON CONFLICT (issuer,subject) DO UPDATE SET email=EXCLUDED.email,is_organiser=EXCLUDED.is_organiser
         RETURNING id`,[randomUUID(),`synthetic:${name}`,email,organiser]);
-      actors.set(name,{id:rows[0].id,email,isOrganiser:organiser});
+      actors.set(name,{subject:`synthetic:${name}`,email});
     }
   } finally {await admin.end();}
   const url=(role,pass)=>`postgres://${role}:${pass}@127.0.0.1:55432/feedback_local`;
@@ -111,6 +106,7 @@ async function start() {
   const publicPool=new Pool({connectionString:url("feedback_demo_respond",publicPassword),max:4});
   const closerPool=new Pool({connectionString:url("feedback_demo_closer",closerPassword),max:1});
   const issuerPool=new Pool({connectionString:url("feedback_demo_issuer",issuerPassword),max:4});
+  const authPool=new Pool({connectionString:url("feedback_demo_auth",authPassword),max:4});
   const native=await startSigner(5186);
   let closing=false;
   const materialize=async()=>{
@@ -126,9 +122,12 @@ async function start() {
   const acquire=(pool)=>async()=>{
     const client=await pool.connect();return {client,release:async()=>client.release()};
   };
+  // Same server-side session store as production; only the synthetic login route below differs.
+  const store=createSessionStore(acquire(authPool));
   const portal=portalApp({origin:origins.portal.origin,keyDirectory:keysDir,encryptionKey:master,cursorKey,
-    authenticate:async(request)=>session(request),acquireClient:acquire(portalPool),
-    issuer:{acquireClient:acquire(issuerPool),signer:native.signer}});
+    authenticate:store.authenticate,acquireClient:acquire(portalPool),
+    issuer:{acquireClient:acquire(issuerPool),signer:native.signer},
+    auth:{store,acquireClient:acquire(authPool)}});
   const respond=respondApp({origin:origins.respond.origin,acquireClient:acquire(publicPool)});
   const demo=Fastify({logger:false,bodyLimit:128});
   demo.addHook("onRequest",async(_req,reply)=>{reply.header("Cache-Control","no-store");});
@@ -141,18 +140,10 @@ async function start() {
     }
     const actor=actors.get(request.body.account);
     if (!actor) return reply.code(404).send({error:{code:"not_found",message:"not found"}});
-    const token=randomBytes(32).toString("base64url");
-    secrets.set(token,{...actor,csrfToken:randomBytes(32).toString("base64url"),expiresAt:until()});
-    reply.header("Set-Cookie",`__Host-session=${token}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`);
-    return reply.code(204).send();
-  });
-  demo.post("/__demo/logout",async(request,reply)=>{
-    const state=session(request);
-    if (!state || request.headers.origin!==origins.portal.origin ||
-        request.headers["x-csrf-token"]!==state.csrfToken) return reply.code(403).send({error:{code:"forbidden",message:"forbidden"}});
-    const token=/(?:^|; )__Host-session=([A-Za-z0-9_-]+)/.exec(request.headers.cookie??"")?.[1];
-    if(token) secrets.delete(token);
-    reply.header("Set-Cookie","__Host-session=; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+    // Synthetic stand-in for a verified Google identity: stable subject, invented address.
+    const session=await store.establish({issuer:"https://accounts.google.com",subject:actor.subject,email:actor.email},
+      readTokenCookie(request.headers.cookie,SESSION_COOKIE));
+    reply.header("Set-Cookie",hostCookie(SESSION_COOKIE,session.token,session.maxAgeSeconds));
     return reply.code(204).send();
   });
   const servers=[portal,respond,demo];
@@ -163,13 +154,13 @@ async function start() {
   } catch(cause) {
     clearInterval(interval);
     await Promise.allSettled(servers.map((server)=>server.close()));
-    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end(),issuerPool.end()]);
+    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end(),issuerPool.end(),authPool.end()]);
     native.stop();
     throw cause;
   }
   console.log("Synthetic-only loopback APIs ready (portal 5183, response 5184, demo auth 5185, native signer 5186). No real participants.");
   const stop=async()=>{clearInterval(interval);await Promise.allSettled(servers.map((server)=>server.close()));
-    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end(),issuerPool.end()]);native.stop();process.exit(0);};
+    await Promise.allSettled([portalPool.end(),publicPool.end(),closerPool.end(),issuerPool.end(),authPool.end()]);native.stop();process.exit(0);};
   process.once("SIGINT",()=>{void stop();});process.once("SIGTERM",()=>{void stop();});
 }
 await start();

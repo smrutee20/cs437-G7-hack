@@ -45,7 +45,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | 3. Anonymous issuance | complete for synthetic development; signer provisioning and request budget deferred to 6 | 2 | One durable blind claim per entitlement and reliable browser handoff. |
 | 4. Anonymous redemption | complete for synthetic development; log review and draft persistence deferred | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
 | 5. Results | complete for synthetic development; results-withdrawal journal and operations deferred to 6 | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
-| 6. Production boundaries | not started | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
+| 6. Production boundaries | in progress (synthetic/local evidence only) | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
 | 7. Demo and release review | not started | 6 for real release; 5 for synthetic demo | Complete walkthrough and independently checked acceptance evidence. |
 
 ## 2. Milestone 0 — Foundation (detailed)
@@ -542,6 +542,30 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 - Implement/test real Google OIDC (only with authorized institutional accounts), session/CSRF flow, runtime DB privileges, request bounds, strict deployment headers, logging controls, scheduled retention, key destruction, purge/withdrawal journal, backup restore fail-closed policy, and operator withdrawal. Do not bypass external access/hosting requirements for a passing test.
 - Leading tests: right email suffix without signed institutional `hd` fails; all organiser mutations require correct identity/CSRF; forbidden roles cannot read raw response/identity tables; restored open polls cannot resume; withdrawn/expired data cannot reappear from backup; error paths do not log participant data.
 - Exit: security/operations acceptance tests pass with production-like infrastructure **and** the real-participant release checklist has documented evidence or explicitly remains blocked. Synthetic demo can still ship separately if external approvals are unavailable.
+
+**Pre-slice harness fix (2026-11-08):** the baseline `npm run test:db` failed one test, `tests/db/results.test.ts` "shuffles each free-text question independently", with `Test timed out in 5000ms`. It generates five 3072-bit keys; on this machine that overruns Vitest's default. It now has an explicit 60 s budget. That is a harness limit, not a product defect, so no red is claimed.
+
+**Slice 1 (Google OIDC and server-side sessions, 2026-11-08):**
+
+- **Dependency.** `google-auth-library@11.3.1`, pinned exactly in `services/portal-api` (lockfile `sha512-mQS0R2Ev…A7qA==`). 11.3.3 was 5 days old, so the 3-week-old 11.3.1 was chosen. `npm audit --audit-level=moderate`: 0 vulnerabilities.
+- **Library review** (`build/src/auth/oauth2client.js`, `verifySignedJwtWithCertsAsync`): it verifies RSA-SHA256 against the keyed certificate, iss, a single-string aud, and iat/exp, but allows **300 s** skew, never inspects the header `alg`, and puts the raw JWT in its error messages. So `oidc.ts` adds an RS256-only header check, 60 s skew, a single-string `aud`, `azp`, a constant-time nonce, `sub`, strict `email_verified === true`, the exact email domain, and the signed `hd`. It discards every library error unread. Token exchange is a direct `fetch` with the PKCE verifier and a 5 s timeout, so no gaxios/google-logging-utils debug path sees the code or tokens.
+- **Migration** `0006_sessions.sql` (forward-only):
+  - `identity.oauth_transactions` holds hashed state and pre-auth binding, nonce, verifier, an allowlisted return path, and expiry.
+  - `identity.sessions` holds the token hash, user, the verified email at sign-in, the CSRF token, and an absolute expiry.
+  - `identity.upsert_verified_user` binds `(issuer, sub)` and updates the email, never the organiser flag.
+  - The non-login `feedback_auth` role gets only these tables, `SELECT(id, is_organiser)` on users, and the function.
+- **Routes.** `GET /auth/login` sets a 10-minute `__Host-preauth` cookie and redirects with `scope=openid email`, S256, and separate 256-bit state/nonce; return paths are only `/` and `/signed-in`. `GET /auth/callback` deletes the transaction first (single use), checks the pre-auth binding, exchanges, verifies, rotates the session, and redirects with `no-store` and `no-referrer` and no body. `POST /auth/logout` goes through the session/Origin/CSRF/JSON guard. Organiser status is read live on every request.
+- **Demo.** `dev/demo.mjs` now uses the same DB session store through a `feedback_demo_auth` login. Only its synthetic `/__demo/login` differs, and `/__demo/logout` is removed in favour of the production logout route.
+- **Tests** (`tests/db/oidc.test.ts`, a local RS256 test IdP and a stubbed token endpoint; no Google account):
+  - Red: 4/4 failed (500 from the stub store; no login route).
+  - Green: 4/4.
+  - 18 ID-token failures are refused: issuer, audience, multiple audiences, foreign `azp`, expiry, future `iat`, nonce, missing/wrong/suffix `hd`, `email_verified` false and `"true"`, gmail and subdomain email, empty `sub`, a foreign signing key, an HS256 header, and an unknown `kid`.
+  - Also refused: reused state, a missing or forged pre-auth cookie (which also burns the state), an expired transaction, a provider `error`, an unexpected callback parameter, and 7 unsafe return paths.
+  - Positive cases: a stable `(issuer, sub)` across an email change, normalised issuer, session rotation, logout CSRF/Origin, the absolute expiry, and cookie attributes.
+  - Mutation, 9 mutants, **all killed**: no `hd`, no nonce, no pre-auth binding, the library's 300 s skew, truthy `email_verified`, no `azp`, reusable state, email suffix only, no expiry.
+- **Harness fix.** The test-only `rollbackFoundation` dropped `identity.users` explicitly. The new sessions FK blocked that and left the shared test DB dirty, so later files failed at migration (a setup failure, not a red). It now drops sessions/transactions first.
+- **Broader checks:** typecheck, build, unit 167/167, DB 54/54, and `test:demo-browser` 8/8.
+- **Not established:** a real Google client, institutional `hd`, or real tokens (release blocker 1). No production listener exists yet.
 
 ### Milestone 7 — Walkthrough and release review
 

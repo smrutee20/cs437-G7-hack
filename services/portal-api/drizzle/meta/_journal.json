@@ -7,6 +7,7 @@
     {"idx": 2, "version": "7", "when": 1794000000002, "tag": "0002_claim_context", "breakpoints": true},
     {"idx": 3, "version": "7", "when": 1794000000003, "tag": "0003_claim_issuance", "breakpoints": true},
     {"idx": 4, "version": "7", "when": 1794000000004, "tag": "0004_redemption", "breakpoints": true},
-    {"idx": 5, "version": "7", "when": 1794000000005, "tag": "0005_results", "breakpoints": true}
+    {"idx": 5, "version": "7", "when": 1794000000005, "tag": "0005_results", "breakpoints": true},
+    {"idx": 6, "version": "7", "when": 1794000000006, "tag": "0006_sessions", "breakpoints": true}
   ]
 }

@@ -13,14 +13,25 @@ export type UsableRecord = {
   pollId: string; state: "usable"; keyId: string; keyVersion: 1; closesAt: string;
   prepared: Uint8Array; signature: Uint8Array;
 };
+/** The credential plus the exact canonical answers being submitted; retries reuse this snapshot. */
+export type SubmitPendingRecord = Omit<UsableRecord, "state"> & {
+  state: "submit_pending"; answers: { questionId: string; value: string | number }[];
+  /** True once any attempt had an unknown outcome: later definitive-looking errors no longer prove failure. */
+  uncertain: boolean;
+};
 /** Non-secret terminal marker. No response or claim identifier. */
-export type MarkerRecord = { pollId: string; state: "claim_consumed" | "claim_uncertain"; closesAt: string };
-export type CredentialRecord = PreparedRecord | ClaimSentRecord | UsableRecord | MarkerRecord;
+export type MarkerRecord = {
+  pollId: string; state: "claim_consumed" | "claim_uncertain" | "accepted" | "spent" | "credential_invalid"; closesAt: string;
+};
+export type CredentialRecord = PreparedRecord | ClaimSentRecord | UsableRecord | SubmitPendingRecord | MarkerRecord;
+const MARKERS: ReadonlySet<CredentialState> = new Set(["claim_consumed", "claim_uncertain", "accepted", "spent", "credential_invalid"]);
 export type CredentialState = CredentialRecord["state"];
 
 /** The bridge may resend its one result for two minutes; after that the attempt is stranded. */
 export const CLAIM_RESULT_WINDOW_MS = 2 * 60 * 1000;
 const MARKER_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+/** A pending submission may be confirmed until 24 hours after effective closure (at most closesAt). */
+const PENDING_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const DB_NAME = "iitgn-feedback";
 const STORE = "credentials";
 
@@ -136,16 +147,21 @@ export const marker = (record: CredentialRecord, state: MarkerRecord["state"]): 
 
 /**
  * Erases what must not outlive its purpose: unused credentials once the poll is
- * observed closed or withdrawn, a stranded claim after the result window, and
- * non-secret markers seven days after closure. Run on start, load and while open.
+ * observed closed or withdrawn, a stranded claim after the result window, a
+ * pending submission 24 hours after the deadline (even if its outcome is still
+ * unknown), and non-secret markers seven days after closure. Run on start, load
+ * and while a tab is open.
  */
 export function sweep(pollId: string, observed: { open: boolean } | null, now = Date.now()): Promise<CredentialRecord | null> {
   return withPollLock(pollId, async () => {
     const current = await readRecord(pollId);
     if (!current) return null;
     let next: CredentialRecord | null = current;
-    if (current.state === "claim_consumed" || current.state === "claim_uncertain") {
+    if (MARKERS.has(current.state)) {
       if (now >= Date.parse(current.closesAt) + MARKER_LIFETIME_MS) next = null;
+    } else if (current.state === "submit_pending") {
+      // Kept through observed closure: an identical retry can still confirm it.
+      if (now >= Date.parse(current.closesAt) + PENDING_LIFETIME_MS) next = null;
     } else if (observed && !observed.open) {
       next = null;
     } else if (current.state === "claim_sent" && now - current.sentAt >= CLAIM_RESULT_WINDOW_MS) {

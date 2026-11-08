@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { isCanonicalUuidV4 } from "@iitgn-feedback/protocol";
+import { canonicalizeAnswers, isCanonicalUuidV4 } from "@iitgn-feedback/protocol";
 import { beginClaim, finishClaim, prepareCredential, type ClaimOutcome } from "./claim-flow";
 import { missingClaimCapabilities, openClaimWindow, type ClaimWindowState } from "./claim-window";
-import { onRecordChange, sweep, type CredentialRecord, type CredentialState } from "./credential-store";
+import { onRecordChange, sweep, type CredentialRecord, type CredentialState, type SubmitPendingRecord } from "./credential-store";
+import { beginSubmission, sendSubmission, type SubmitOutcome } from "./submit-flow";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing response root element");
@@ -27,7 +28,11 @@ const RECORD_TEXT: Record<CredentialState | "none", string> = {
   none: "No credential is stored in this browser for this poll.",
   prepared: "A credential request is prepared in this browser. Open the claim window to have it signed.",
   claim_sent: "A claim from this browser is in progress or its outcome is unknown. No new claim will be started from this browser.",
-  usable: "Your credential is stored in this browser. Submitting answers is not available in this synthetic build yet.",
+  usable: "Your credential is stored in this browser. Answer below; the credential is used once.",
+  submit_pending: "Your answers are saved in this browser with the credential. Their submission is not confirmed yet.",
+  accepted: "Your response was recorded. The credential and your answers have been erased from this browser.",
+  spent: "This credential was already used with different answers. It has been erased from this browser.",
+  credential_invalid: "The response service rejected this browser's credential as invalid, so this browser cannot respond.",
   claim_consumed: "A credential for your account on this poll has already been claimed, or a claim was used up without " +
     "delivering a credential. This browser cannot respond to this poll.",
   claim_uncertain: "An earlier claim from this browser has an unknown outcome, so it cannot claim again. This browser cannot " +
@@ -54,14 +59,86 @@ function outcomeText(outcome: ClaimOutcome): string {
   }
 }
 
-function ClaimPanel({ poll }: { poll: PublicPoll }) {
+function submitText(outcome: SubmitOutcome): string {
+  switch (outcome.kind) {
+    case "accepted": return "Your response was recorded.";
+    case "spent": return "This credential was already used with different answers, so these answers were not recorded.";
+    case "closed": return "This poll is closed or withdrawn, so these answers were not recorded.";
+    case "invalid_credential": return "The response service rejected the credential. These answers were not recorded.";
+    case "edit": return `The response service rejected these answers${outcome.field ? ` (${outcome.field})` : ""}. Edit them and submit again.`;
+    case "retry_later": return "Too many submissions right now. Try again shortly.";
+    case "uncertain": return "Your submission could not be confirmed. Your exact answers are kept; use “Retry submission” to resend them.";
+  }
+}
+
+/** Current public status, re-read before a new claim or submission (SPEC.md §8). Null if it can't be read. */
+async function stillOpen(pollId: string): Promise<boolean | null> {
+  try {
+    const response = await fetch(`/api/v1/polls/${pollId}/public`, { credentials: "omit", cache: "no-store" });
+    if (response.status === 404) return false;
+    if (!response.ok) return null;
+    const poll = await response.json();
+    return poll.status === "open" && !poll.invalidated;
+  } catch {
+    return null; // the server still decides; an unread status does not block
+  }
+}
+
+type Draft = Record<string, string>;
+function AnswerForm({ questions, disabled, onSubmit }: {
+  questions: PublicQuestion[]; disabled: boolean; onSubmit: (draft: Draft) => void;
+}) {
+  const [draft, setDraft] = useState<Draft>({});
+  const set = (id: string, value: string) => setDraft((current) => ({ ...current, [id]: value }));
+  return (
+    <form onSubmit={(event) => { event.preventDefault(); onSubmit(draft); }}>
+      {questions.map((question) => question.type === "free_text"
+        ? <p key={question.id}><label>{question.prompt}
+            <textarea value={draft[question.id] ?? ""} disabled={disabled} maxLength={8000}
+              onChange={(event) => set(question.id, event.target.value)} /></label>
+            <br /><small>Optional. Free text may identify you. Do not include identifying details.</small></p>
+        : <fieldset key={question.id} disabled={disabled}>
+            <legend>{question.prompt}{question.required ? " (required)" : " (optional)"}</legend>
+            {(question.type === "single_choice" ? question.options ?? [] : [1, 2, 3, 4, 5].map((n) => ({ id: String(n), label: String(n) })))
+              .map((option) => <label key={option.id}>
+                <input type="radio" name={question.id} value={option.id} checked={draft[question.id] === option.id}
+                  onChange={() => set(question.id, option.id)} />{option.label}</label>)}
+          </fieldset>)}
+      <button type="submit" disabled={disabled}>Submit answers</button>
+    </form>
+  );
+}
+function FrozenAnswers({ questions, record }: { questions: PublicQuestion[]; record: SubmitPendingRecord }) {
+  const shown = (question: PublicQuestion, value: string | number) =>
+    question.type === "single_choice" ? question.options?.find((option) => option.id === value)?.label ?? "" : String(value);
+  return <dl>{record.answers.map((entry) => {
+    const question = questions.find((candidate) => candidate.id === entry.questionId);
+    return question ? <div key={entry.questionId}><dt>{question.prompt}</dt><dd>{shown(question, entry.value)}</dd></div> : null;
+  })}</dl>;
+}
+
+function ClaimPanel({ poll, onForm }: { poll: PublicPoll; onForm: (shown: boolean) => void }) {
   const open = poll.status === "open" && !poll.invalidated;
   const [missing, setMissing] = useState<string[] | null>(null);
   const [record, setRecord] = useState<CredentialRecord | null | undefined>(undefined);
   const [win, setWin] = useState<{ state: ClaimWindowState | "idle"; rejected: number }>({ state: "idle", rejected: 0 });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const cleanup = useRef<() => void>(() => {});
+  const submit = async (start: () => Promise<unknown>) => {
+    setSending(true);
+    try {
+      await start();
+      setSubmitMessage(submitText(await sendSubmission(poll.id)));
+    } catch {
+      setSubmitMessage("Your answers could not be saved in this browser, so nothing was sent.");
+    } finally {
+      setSending(false);
+      await refresh();
+    }
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -92,6 +169,7 @@ function ClaimPanel({ poll }: { poll: PublicPoll }) {
     );
   }
   const state = record === undefined ? "loading" : record?.state ?? "none";
+  const formShown = open && state === "usable";
   const windowBusy = !["idle", "popup_blocked", "connection_lost", "bridge_closed", "not_sent", "done"].includes(win.state);
   return (
     <section data-testid="capabilities" data-state="supported">
@@ -100,7 +178,11 @@ function ClaimPanel({ poll }: { poll: PublicPoll }) {
         <button type="button" disabled={busy} onClick={() => {
           setBusy(true);
           setMessage("");
-          prepareCredential(poll)
+          stillOpen(poll.id)
+            .then((current) => {
+              if (current === false) { setMessage("This poll has closed, so no credential can be claimed."); return; }
+              return prepareCredential(poll).then(() => undefined);
+            })
             .catch(() => setMessage("A credential request could not be saved in this browser. Nothing was sent."))
             .finally(() => { setBusy(false); void refresh(); });
         }}>Prepare credential</button>
@@ -134,12 +216,45 @@ function ClaimPanel({ poll }: { poll: PublicPoll }) {
       )}
       <p data-testid="claim-window" data-state={win.state} data-rejected={win.rejected}>{WINDOW_TEXT[win.state as ClaimWindowState] ?? ""}</p>
       <p data-testid="claim-message" role="status">{message}</p>
+      <FormVisibility shown={formShown} onForm={onForm} />
+      {formShown && <AnswerForm questions={poll.questions} disabled={sending} onSubmit={(draft) => {
+        // The browser check only explains problems early; the server's validation is authoritative.
+        const raw = poll.questions.flatMap((question) => {
+          const value = draft[question.id];
+          if (value === undefined || (question.type === "free_text" && value.trim() === "")) return [];
+          return [{ questionId: question.id, value: question.type === "rating" ? Number(value) : value }];
+        });
+        const canonical = canonicalizeAnswers(poll.questions, raw);
+        if (!canonical.ok) {
+          setSubmitMessage(canonical.field === "answers"
+            ? "Answer every required question before submitting."
+            : "One of these answers is not valid. Check it and submit again.");
+          return;
+        }
+        setSubmitMessage("");
+        void (async () => {
+          if (await stillOpen(poll.id) === false) {
+            // Observed closure erases the unused credential; nothing is sent.
+            await sweep(poll.id, { open: false }).catch(() => {});
+            setSubmitMessage("This poll has closed, so these answers were not sent.");
+            await refresh();
+            return;
+          }
+          await submit(() => beginSubmission(poll.id, canonical.answers));
+        })();
+      }} />}
+      {record?.state === "submit_pending" && <div>
+        <FrozenAnswers questions={poll.questions} record={record} />
+        <button type="button" disabled={sending} onClick={() => void submit(async () => {})}>Retry submission</button>
+      </div>}
+      <p data-testid="submit-message" role="status">{submitMessage}</p>
     </section>
   );
 }
 
 function PollPage({ pollId }: { pollId: string }) {
   const [poll, setPoll] = useState<PublicPoll | null>(null);
+  const [formShown, setFormShown] = useState(false);
   const [state, setState] = useState<"loading" | "missing" | "ready">("loading");
   useEffect(() => {
     const abort = new AbortController();
@@ -161,13 +276,18 @@ function PollPage({ pollId }: { pollId: string }) {
       election system or a guarantee of absolute anonymity.</p>
     <p>Your credential is kept only in this browser’s storage. Clearing site data, private browsing, or losing this device
       loses it, and it cannot be re-issued. Do not claim right at the deadline.</p>
-    <ClaimPanel poll={poll} />
-    <ol>{poll.questions.map((question) => <li key={question.id}><p>{question.prompt}{question.required ? " (required)" : " (optional)"}</p>
+    <ClaimPanel poll={poll} onForm={setFormShown} />
+    {!formShown && <ol>{poll.questions.map((question) => <li key={question.id}><p>{question.prompt}{question.required ? " (required)" : " (optional)"}</p>
       {question.type === "single_choice" ? <ul>{question.options?.map((option) => <li key={option.id}>{option.label}</li>)}</ul> :
         question.type === "rating" ? <p>Rating: 1–5</p> :
           <p>Free text may identify you. Do not include identifying details.</p>}
-    </li>)}</ol>
+    </li>)}</ol>}
   </main>;
+}
+/** Lets the page hide its read-only question list while the answer form shows the same questions. */
+function FormVisibility({ shown, onForm }: { shown: boolean; onForm: (shown: boolean) => void }) {
+  useEffect(() => { onForm(shown); }, [shown, onForm]);
+  return null;
 }
 
 const match = /^\/p\/([^/]+)$/.exec(window.location.pathname);

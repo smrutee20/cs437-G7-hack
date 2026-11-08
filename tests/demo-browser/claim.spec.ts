@@ -2,10 +2,13 @@
 // workerd native signer, both HTTPS origins. Invented accounts only.
 import { createPublicKey, randomUUID } from "node:crypto";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { Client } from "pg";
 import { nodeVerifyPss } from "../fixtures/rsa";
 
 const portal = "https://portal.feedback.test:4173";
 const respond = "https://respond.feedback.test:4174";
+// The demo's disposable local database (same fixed loopback URL as the launcher).
+const localDb = "postgres://feedback_local_admin:feedback_local_only_not_for_production@127.0.0.1:55432/feedback_local";
 
 async function signedIn(browser: Browser, account: string): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -27,7 +30,7 @@ async function openedPoll(browser: Browser) {
       const opened = await fetch(`/api/v1/polls/${created.id}/open`, { method: "POST", headers, body: JSON.stringify({ revision: 1 }) });
       if (!opened.ok) throw new Error(`open failed ${opened.status}`);
       return (await (await fetch(`/api/v1/polls/${created.id}/claim-context`)).json()) as
-        { id: string; title: string; key: { publicJwk: { kty: "RSA"; n: string; e: "AQAB" } } };
+        { id: string; title: string; questions: { id: string }[]; key: { publicJwk: { kty: "RSA"; n: string; e: "AQAB" } } };
     }, {
       title: `Synthetic claim ${Date.now()}`, description: "", closesAt: new Date(Date.now() + 86_400_000).toISOString(),
       questions: [{ id: randomUUID(), type: "rating", prompt: "How was it?", required: true }],
@@ -61,7 +64,7 @@ const storedCredential = (page: Page, pollId: string) => page.evaluate((id) => n
   };
 }), pollId);
 
-test("an eligible synthetic participant claims one natively signed credential; the same account cannot claim again", async ({ browser }) => {
+test("an eligible synthetic participant claims a natively signed credential and submits one anonymous response; the same account cannot claim again", async ({ browser }) => {
   const poll = await openedPoll(browser);
   const first = await signedIn(browser, "student1");
   try {
@@ -73,6 +76,20 @@ test("an eligible synthetic participant claims one natively signed credential; t
     expect(nodeVerifyPss(key, Buffer.from(record.prepared, "base64"), Buffer.from(record.signature, "base64"))).toBe(true);
     // The response origin never received the portal session cookie.
     expect((await first.context.cookies(respond)).map((cookie) => cookie.name)).not.toContain("__Host-session");
+
+    // Answer and submit through the real response API: exactly one anonymous row results.
+    await first.page.getByRole("group", { name: /How was it\?/ }).getByLabel("4").check();
+    await first.page.getByRole("button", { name: "Submit answers" }).click();
+    await expect(first.page.getByTestId("credential")).toHaveAttribute("data-state", "accepted");
+    expect(Object.keys(await storedCredential(first.page, poll.id)).sort()).toEqual(["closesAt", "pollId", "state"]);
+    const db = new Client({ connectionString: localDb });
+    await db.connect();
+    try {
+      const { rows } = await db.query("SELECT * FROM anonymous.responses WHERE poll_id=$1", [poll.id]);
+      expect(rows).toHaveLength(1);
+      expect(Object.keys(rows[0]).sort()).toEqual(["answers", "nullifier", "poll_id"]);
+      expect(rows[0].answers).toEqual([{ questionId: poll.questions[0].id, value: 4 }]);
+    } finally { await db.end(); }
   } finally { await first.context.close(); }
 
   // Same account, fresh browser storage: the server-side entitlement is already consumed.

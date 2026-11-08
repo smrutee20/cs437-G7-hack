@@ -43,7 +43,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | 1. Feasibility | complete for synthetic development; 1.4 external checks blocked (release prerequisites) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | complete for synthetic development; production auth/operations deferred to 6 | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
 | 3. Anonymous issuance | complete for synthetic development; signer provisioning and request budget deferred to 6 | 2 | One durable blind claim per entitlement and reliable browser handoff. |
-| 4. Anonymous redemption | in progress (server redemption and public route done; browser submission not started) | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
+| 4. Anonymous redemption | complete for synthetic development; log review and draft persistence deferred | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
 | 5. Results | not started | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
 | 6. Production boundaries | not started | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
 | 7. Demo and release review | not started | 6 for real release; 5 for synthetic demo | Complete walkthrough and independently checked acceptance evidence. |
@@ -434,7 +434,54 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
   - Covered: accept/replay/conflict bodies; no echo of signature or answer text; the cookie ignored; an absent Origin allowed; the portal Origin 403; `text/plain` and gzip 415; a credential in the query 400; a duplicate member 400; over 64 KiB 413; an unknown poll 404; none of these spending the credential; tampered signature 400 `invalid_credential`; missing required answer 422 with `field` but no value; closed poll 410; per-poll and global 429.
 - **Route mutation:** 6 mutants, 5 killed (any origin, query allowed, compressed allowed, no per-poll bucket, no global bucket). **Survivor:** removing the verification-semaphore wiring. The semaphore is unit-tested, but driving its limits through HTTP would need a timing-fragile concurrency test; this remains a code-review item.
 - **Broader checks:** typecheck, build, unit 167/167, DB 42/42.
-- **Not yet done:** the browser answer form, `submit_pending` with an exact saved payload and retry, post-acceptance cleanup to an `accepted` marker, and the demo end-to-end submission. **The Milestone 4 exit gate is not met.**
+- **Still open after slice 2:** the browser submission flow, addressed in slice 3 below.
+
+**Slice 3 (browser submission and cleanup, 2026-11-08):**
+
+- **Store.** `credential-store.ts` adds `submit_pending`: the credential plus the exact canonical answers, with an `uncertain` flag. It also adds the non-secret markers `accepted`, `spent` and `credential_invalid`. The sweep now:
+  - keeps `submit_pending` through observed closure and erases it 24 h after the deadline, even if the outcome is unknown;
+  - erases unused state when the poll is observed closed;
+  - expires markers after 7 days.
+- **Flow.** In `submit-flow.ts`, the payload is frozen before the first attempt and every retry resends those exact bytes. Retries are explicit only. Requests use `credentials: "omit"` and no query string. Outcome handling:
+  - 201/200 → `accepted` (credential and answers erased);
+  - 409 `credential_spent` → `spent`;
+  - 410 or 404 → erase;
+  - `invalid_credential` → marker;
+  - 422 → back to editing;
+  - 429 or capacity → back to editing on a first attempt, otherwise keep pending;
+  - network or other errors → mark uncertain and keep pending.
+- **UI.** `main.tsx` shows an answer form while `usable` (radio groups per question, a textarea for free text), runs the shared canonicalizer only to explain problems early, freezes answers read-only while pending, and shows an explicit **Retry submission** button.
+- **Tests.** `tests/browser/submit.spec.ts` red: every test failed, because no answer form existed. Then:
+  - one stub bug in the test: `outcomes[index] ?? accepted` turned the intended `null` connection reset into an acceptance;
+  - after fixing it, green in Chromium and Firefox.
+- **Coverage:**
+  - the canonical payload, no cookie, and no query;
+  - success leaves only `{closesAt,pollId,state}`;
+  - the client-side required check sends nothing, and a server 422 returns to editing without spending;
+  - uncertain → frozen → reload → retry hits 429 and stays pending (it does not prove failure) → retry hits 200 → accepted, with three byte-identical payloads;
+  - spent erases;
+  - closure erases unused state, a first-attempt 410 erases, and a pending submission survives closure but is erased 49 h later (Playwright clock);
+  - a respond-origin cookie is never sent.
+- **Mutation (10):** **all killed**. They covered accepted keeping the credential, uncertain returning to editing, a rate limit ignoring uncertainty, 422 keeping pending, spent keeping the credential, closed keeping the record, closure erasing pending, pending never expiring, cookies sent, and an automatic retry.
+- **Status refresh.** SPEC §8 requires public status to be refreshed before a new claim or submission. A new test failed red: the submission was sent after the poll closed mid-session. Now `stillOpen()` re-reads `/public` before preparing or submitting; observed closure erases the unused credential and sends nothing. Green.
+- **Real stack.** `tests/demo-browser/claim.spec.ts` now also answers and submits. Against the demo's real response API, `feedback_response_public` and the local disposable database, it reached `accepted` in Chromium and Firefox. The stored row had exactly `{answers,nullifier,poll_id}` with the canonical answer.
+- **Final checks on this tree:** `npm run build`; `npm run test` (unit 167, signer 31, DB 42, browser 66); `FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only npm run test:demo-browser` 6/6; no orphaned workerd.
+
+**Milestone 4 exit assessment — complete for synthetic development only (2026-11-08).**
+
+- The synthetic vertical slice works across both hostnames in both browsers, with the real issuer, the native signer and the public verifier. The duplicate, invalid, expired and retry paths are tested at the DB, route and browser levels. The response schema has no respondent-level linkage column.
+- All four leading tests pass on real PostgreSQL:
+  - parallel submissions produce one row;
+  - an identical retry after a lost acknowledgement, and after normal closure, confirms;
+  - changed answers cannot replace a stored response;
+  - close, deadline and in-flight races cannot admit a late first response.
+- **Residual, carried forward:**
+  - Logs are disabled by construction (`logger: false`, no request logging in the demo launcher), but **no log or ingress capture review** has been done. That is scenario 19, Milestone 6.
+  - **Local draft answers are not persisted** in IndexedDB; SPEC §8 lists them in the `prepared`/`usable` states. They live only in page memory. Reconcile the SPEC or implement this before release.
+  - The route wiring of the verification semaphore is a mutation survivor (unit-tested only).
+  - Plain `INSERT` without `ON CONFLICT` is an equivalent survivor under the advisory lock.
+  - After observing closure, the page still shows **Prepare credential** until reload; the refresh check then refuses it.
+- Milestone 5 (results) has **not** started. No results endpoint exists.
 
 ### Milestone 5 — Gated results
 
@@ -465,18 +512,18 @@ The numbers below refer to `SPEC.md` §17. A row assigns the **primary milestone
 | 3 | 2 | Organiser ownership and role checks, revisited under production OIDC in 6. |
 | 4 | 6 | Real session/CSRF/origin tests and production demo-auth exclusion. |
 | 5 | 1 | RFC suite/encoding vectors, native signing, browser/server interoperation. |
-| 6 | 4 | Distinct keys and attempted hidden cross-poll issuance/redeem; key-isolation proof begins in 3. |
-| 7 | 4 | Malformed credentials/messages/answers cannot create a response. |
+| 6 | 4 | Distinct keys and attempted hidden cross-poll issuance/redeem; key-isolation proof begins in 3. Observed: `tests/db/redeem.test.ts` (hidden B message signed by A refused at A and B), `tests/db/claim.test.ts`. |
+| 7 | 4 | Malformed credentials/messages/answers cannot create a response. Observed: `tests/db/redeem.test.ts`, `tests/db/respond-api.test.ts`, `tests/unit/answers.test.ts`. |
 | 8 | 3 | Concurrent claim and crash-window database/signer tests. Observed: `tests/db/claim.test.ts` (8-way and shared-entry races, lost commit ack, killed backend, post-commit signer failure/fault), `tests/browser/claim.spec.ts` (lost bridge result never re-claims). |
 | 9 | 3 | Draft/closed/expired/withdrawn issuance rejection and key restart behavior. Observed: `tests/db/claim.test.ts` (state rejections, lock-wait race), `tests/db/claim-api.test.ts` (restart keeps key; missing key fails closed, no regeneration). |
-| 10 | 4 | Parallel identical/different-answer redemption and nullifier uniqueness. |
-| 11 | 4 | Server answer validation, normalization, and idempotency. |
-| 12 | 4 | Lost-acknowledgment and deadline-crossing retry semantics. |
+| 10 | 4 | Parallel identical/different-answer redemption and nullifier uniqueness. Observed: `tests/db/redeem.test.ts` (6-way races, alternate preparation of one secret). |
+| 11 | 4 | Server answer validation, normalization, and idempotency. Observed: `tests/unit/answers.test.ts`, `tests/db/redeem.test.ts` (reordered/re-spaced replay). |
+| 12 | 4 | Lost-acknowledgment and deadline-crossing retry semantics. Observed: `tests/db/redeem.test.ts` (lost ack, advisory-lock wait past the deadline), `tests/browser/submit.spec.ts`. |
 | 13 | 4 | Real DB claim/submit/close race; results finalization completed and rechecked in 5. |
 | 14 | 2 | Draft revision/freeze and open/edit race with DB roles. |
 | 15 | 1 | Real-browser cookie and hostname isolation captures. |
 | 16 | 3 | Full bridge/store failure modes; basic handoff proof begins in 1. Observed: `tests/browser/{bridge,claim,claim-interruptions,popup-blocker}.spec.ts`; a response tab closed mid-claim is not yet covered. |
-| 17 | 4 | Browser prepared/usable/pending/terminal cleanup and no-secret transport checks. |
+| 17 | 4 | Browser prepared/usable/pending/terminal cleanup and no-secret transport checks. Observed: `tests/browser/{claim,submit}.spec.ts`; draft-answer persistence not implemented. |
 | 18 | 5 | Malicious organiser/answer content, CSP, opener, and rendering checks; safe rendering starts in 2. |
 | 19 | 6 | Persistence and real ingress/app/native signer/error log review; enforce safe defaults from 1 onward. |
 | 20 | 6 | Full runtime role/function privilege checks; establish foundational DB roles in 2. |

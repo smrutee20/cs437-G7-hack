@@ -55,7 +55,13 @@ Colours follow the Feedback Booth palette ([`design/tokens.css`](../../design/to
 
 ## Exporting
 
-There is no draw.io CLI installed on this machine. With draw.io desktop installed:
+Rendered PDFs of every diagram are in [`pdf/`](pdf/), one page each, cropped to the diagram. They are generated from the `.drawio` sources, so re-export after editing a diagram. With draw.io desktop installed, from this folder:
+
+```sh
+for f in *.drawio; do drawio -x -f pdf --crop -o "pdf/${f%.drawio}.pdf" "$f"; done
+```
+
+Other formats:
 
 ```sh
 drawio -x -f svg -e -o system-architecture.svg system-architecture.drawio   # -e keeps the diagram editable inside the SVG

@@ -144,7 +144,7 @@ Every purge is journaled.
 | Durable PostgreSQL and encrypted private-key store; 7-day encrypted backups | **Blocked**: implemented for local disks only. |
 | Signer container image and digest; security sign-off on the no-blinding private operation | **Blocked**. |
 | Signer service-credential provisioning and rotation | Not done (per-run token in the demo only). |
-| CI executed on a real remote | Not done (`.github/workflows/ci.yml` has never run). |
+| CI executed on a real remote | Done for synthetic/local validation: all six jobs passed on `main` ([run 42506531372](https://github.com/nishchaybhutoria/iitgn-feedback-booth/actions/runs/42506531372)); no deployed infrastructure was tested. |
 | Production mock-auth exclusion | Done: separate demo build, startup and build-time bundle checks, config refusals. |
 | All 27 acceptance scenarios | Local/synthetic evidence for all but scenario 1 (real login); see [`release-review.md`](release-review.md). |
 | Recovery and withdrawal procedure exercised | Locally only (template copy of a real database). |

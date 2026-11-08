@@ -58,7 +58,7 @@ All on one machine (Node 24.19.0, PostgreSQL 17 in Compose, Chromium 158.0.8127.
 - A response tab closed mid-claim is not explicitly tested; the bridge erases its result after two minutes either way.
 - There is no handshake timeout while waiting for `bridge_ready`/`bridge_ack`; only window closure ends the wait.
 - The response route's verification-semaphore wiring and `ON CONFLICT` under the advisory lock are equivalent-mutant survivors, kept as defense in depth.
-- The CI workflow has never run (no remote).
+- Follow-up after merging to `main`: all six CI jobs passed on the private remote ([run 42506531372](https://github.com/nishchaybhutoria/iitgn-feedback-booth/actions/runs/42506531372)). CI uses synthetic data and does not verify a production deployment.
 - No accessibility audit with assistive technology; desktop only, as the spec states.
 - No load test or measured throughput.
 - Journal compaction after one year is not implemented.

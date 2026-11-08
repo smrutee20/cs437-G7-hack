@@ -1,4 +1,4 @@
-import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest, type FastifyServerFactory } from "fastify";
 import { isCanonicalUuidV4, parseStrictJson } from "@iitgn-feedback/protocol";
 import type { Client } from "pg";
 import { createKeyedBuckets, createSemaphore, createTokenBucket, Overloaded, type Admission } from "./admission.js";
@@ -13,6 +13,8 @@ type Config = {
   acquireClient: () => Promise<{ client: Client; release: () => Promise<void> }>;
   /** Admission clock; tests freeze it. Defaults to Date.now. */
   now?: () => number;
+  /** Production HTTPS server with request bounds and ingress stripping (packages/http). */
+  serverFactory?: FastifyServerFactory;
 };
 class HttpError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }
@@ -25,7 +27,7 @@ const STATUS: Record<string, number> = {
 };
 
 export function createApp(config: Config) {
-  const app = Fastify({ logger: false, bodyLimit: 64 * 1024 });
+  const app = Fastify({ logger: false, bodyLimit: 64 * 1024, ...(config.serverFactory ? { serverFactory: config.serverFactory } : {}) });
   app.removeContentTypeParser("application/json");
   app.addContentTypeParser("application/json", { parseAs: "buffer" }, (_request, raw, done) => {
     try { done(null, parseStrictJson(raw as Buffer)); }

@@ -1,11 +1,11 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import Fastify, { type FastifyRequest } from "fastify";
+import Fastify, { type FastifyRequest, type FastifyServerFactory } from "fastify";
 import type { Client } from "pg";
 import { isCanonicalUuidV4, parseStrictJson } from "@iitgn-feedback/protocol";
 import { createDraft } from "./create-draft.js";
 import { deleteDraft } from "./delete-draft.js";
-import { DraftValidationError } from "./draft.js";
+import { DraftValidationError, validateDraftInput } from "./draft.js";
 import { closePoll, openPoll, PollError, updateDraft } from "./poll-lifecycle.js";
 import { makeCursor, readCursor } from "./cursor.js";
 import { createSigningCapacity } from "./capacity.js";
@@ -34,6 +34,10 @@ type Config = {
   auth?: { store: SessionStore; acquireClient: Lease; oidc?: OidcConfig };
   /** Append-only purge/withdrawal journal outside the database. Without it, drafts cannot be deleted. */
   journalPath?: string;
+  /** Production HTTPS server with request bounds (packages/http). Tests use Fastify's injector. */
+  serverFactory?: FastifyServerFactory;
+  /** Admission clock for the draft-creation limit; tests may freeze it. */
+  now?: () => number;
 };
 const CLAIM_STATUS: Record<ClaimErrorCode, number> = {
   invalid_request:400, not_found:404, not_eligible:403, claim_consumed:409, poll_closed:410, poll_withdrawn:410,
@@ -58,7 +62,10 @@ function revision(body: unknown): number {
 
 export function createApp(config: Config) {
   if (!Buffer.isBuffer(config.cursorKey) || config.cursorKey.length !== 32) throw new Error("cursor key unavailable");
-  const app = Fastify({logger:false, bodyLimit: 256 * 1024});
+  const app = Fastify({logger:false, bodyLimit: 256 * 1024, ...(config.serverFactory?{serverFactory:config.serverFactory}:{})});
+  // SPEC.md §14 draft/key creation: ten per organiser per day, two concurrent key generations.
+  const draftLimiter=createAccountLimiter({limit:10,windowMs:86_400_000,now:config.now});
+  const keyGeneration=createSigningCapacity({concurrent:2,queue:10,waitMs:2000,healthy:async()=>true});
   app.removeContentTypeParser("application/json");
   app.addContentTypeParser("application/json", { parseAs: "buffer", bodyLimit: 256 * 1024 }, (_request, body, done) => {
     try { done(null, parseStrictJson(body as Buffer)); }
@@ -68,7 +75,7 @@ export function createApp(config: Config) {
   app.addHook("onRequest",async(_req,reply)=>{reply.header("Cache-Control","no-store");});
   app.addHook("preHandler",async(req,reply)=>{
     // Only the OIDC login/callback routes are reachable without a session.
-    if ((req.routeOptions.config as {public?:boolean}|undefined)?.public===true) return;
+    if (req.is404 || (req.routeOptions.config as {public?:boolean}|undefined)?.public===true) return;
     const session = await config.authenticate(req);
     if (!session) return reply.code(401).send(error("authentication_required"));
     sessions.set(req,session);
@@ -149,10 +156,25 @@ export function createApp(config: Config) {
   app.post("/api/v1/polls",async(req,reply)=>{
     const user=sessions.get(req)!;
     if (!user.isOrganiser) throw new ApiError(403,"forbidden");
-    return withClient(async(client)=>{
-      const {id}=await createDraft(client,user.id,req.body,config.keyDirectory,config.encryptionKey);
-      return reply.code(201).send(await ownerPoll(client,user.id,id));
-    });
+    validateDraftInput(req.body); // invalid input never spends the daily key-generation budget
+    const decision=draftLimiter.attempt(user.id);
+    if (!decision.allowed) {
+      return reply.code(429).header("Retry-After",String(decision.retryAfterSeconds)).send(error("rate_limited"));
+    }
+    const release=await keyGeneration.reserve();
+    try {
+      return await withClient(async(client)=>{
+        let id:string;
+        try {({id}=await createDraft(client,user.id,req.body,config.keyDirectory,config.encryptionKey));}
+        catch (cause) {
+          if ((cause as {code?:string}).code==="54000") {
+            return reply.code(422).send({error:{...error("validation_failed").error,field:"retainedPolls"}});
+          }
+          throw cause;
+        }
+        return reply.code(201).send(await ownerPoll(client,user.id,id));
+      });
+    } finally {release();}
   });
   app.get("/api/v1/polls",async(req)=>{
     const owner=sessions.get(req)!.id;

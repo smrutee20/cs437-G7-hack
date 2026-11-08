@@ -28,7 +28,7 @@ export async function createDraft(client: Client, authenticatedUserId: string, i
     // database row can reference the file. Never remove it for a connection or
     // ambiguous commit failure: that could destroy a live poll's private key.
     if (typeof (error as { code?: unknown }).code === "string" &&
-        /^(22|23|42501)/.test((error as { code: string }).code)) {
+        /^(22|23|42501|54000)/.test((error as { code: string }).code)) {
       await unlink(join(keyDirectory, key.privateSecretRef));
       const dir = await open(keyDirectory, constants.O_RDONLY | constants.O_DIRECTORY);
       try { await dir.sync(); } finally { await dir.close(); }

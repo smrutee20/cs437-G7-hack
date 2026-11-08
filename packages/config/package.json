@@ -5,8 +5,14 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/origins.d.ts",
+      "types": "./src/origins.ts",
+      "source": "./src/origins.ts",
       "default": "./dist/origins.js"
+    },
+    "./production": {
+      "types": "./src/production.ts",
+      "source": "./src/production.ts",
+      "default": "./dist/production.js"
     }
   },
   "scripts": {

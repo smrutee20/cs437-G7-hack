@@ -607,6 +607,29 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
   - a scheduled production runner (the production server comes in a later slice);
   - core-dump and swap configuration.
 
+**Slice 3 (production entrypoints, headers, bounds and fail-closed startup, 2026-11-08):**
+
+- **Configuration** (`packages/config/src/production.ts`, SPEC.md §16). It refuses: non-production `NODE_ENV`; same, nested, HTTP, wildcard or development (`.test`/`.localhost`/…) hostnames; any demo, `MIN_`/`SKIP_`/`DISABLE_`/`ALLOW_` switch; a different institutional domain; `GOOGLE_SDK_NODE_LOGGING`, `NODE_DEBUG`, and `NODE_OPTIONS` inspection, profiling or report flags; missing or relative settings; shared database roles; off-host databases without `sslmode=verify-full`; a non-loopback signer; and any identity, key, signer or portal database setting in the **response** service's environment. The callback URI is derived, never configured. Errors name variables, never values.
+  - `tests/unit/production-config.test.ts` red: 7/7 on the stub. Green: 7/7. Mutation: 9 mutants, all killed.
+- **`packages/http`:**
+  - the exact §14 CSP plus the `Referrer-Policy`, `nosniff`, `X-Frame-Options`, `Permissions-Policy`, CORP, HSTS and COOP headers. COOP is `unsafe-none` only on `/p/:pollId` and `/claim-bridge`, `same-origin` elsewhere;
+  - a bundle loader that refuses symlinks, unexpected file types, a `__demo` string, and inline script/style in production;
+  - immutable caching for hashed assets, `no-store` for HTML and API, no ETags;
+  - an HTTPS factory with 8 KiB headers (431), a 2 KiB URI (414), and a 5 s receive timeout, plus a 10 s application budget answering `503 temporarily_unavailable`;
+  - response-host ingress stripping (cookie, authorization, forwarding/client-IP, user-agent and client hints, tracing/baggage, request IDs, identity-proxy headers);
+  - startup checks: secret files not group/world readable; each DB login non-privileged, non-owner, in **exactly** its runtime role, with `fsync`/`synchronous_commit` on.
+- **Servers** (`services/portal-api/src/server.ts`, `services/respond-api/src/server.ts`). Before listening, the portal checks secrets, the key store, all five role logins, journal sync, signer health and the bundle. It then schedules the closer (1 min), retention plus the orphan-key sweep (hourly and at startup), and auth cleanup (30 s). The issuer pool has a 2 s statement timeout, which closes the Milestone 3 preflight-timeout residual. The response server has only its public pool and never sends `Set-Cookie`.
+- **Draft admission** (§14). At most ten key-generating creations per organiser per day, with validation first so invalid input never spends the budget. Two concurrent key generations. Migration `0008_draft_limits.sql` caps retained polls at 50 per organiser under a per-owner row lock and removes the key file on that definite refusal.
+- **Tests:**
+  - `tests/db/production-server.test.ts` (3, real TLS listeners and five per-run login roles). Exact headers per route, cache policy, 404/414/431, API 401 and the login redirect. Every stripped header is absent from what the application sees, with no `Set-Cookie`. Startup refusals: a 0644 secret, a superuser URL, a wrong-role login, a portal login on the response server, an unhealthy signer, a `__demo` bundle, an inline-script bundle, and an out-of-sync journal.
+  - `tests/db/draft-limits.test.ts` (2).
+  - Both were written after the implementation, so **no red is claimed**. Mutation: 12 server mutants and 4 limit mutants, all killed.
+  - The first run's "socket hang up" was the test client reusing a keep-alive socket that the server had correctly closed after the 431 (`agent: false` fixes it).
+  - The `Set-Cookie` removal hook is an equivalent mutant (the response app sets none); it stays as defense in depth.
+- **Vitest** now aliases `@iitgn-feedback/http` and `@iitgn-feedback/config/production` to source, as for `protocol`, so tests never run a stale `dist/`.
+- **Broader checks:** typecheck, build, unit 174/174, DB 64/64.
+- **Not established:** a deployed ingress/CDN/WAF honouring §14/§15; a container image and digest; core-dump and swap settings; HSTS preload; a production bundle in a real browser under CSP (next, with the redesigned UI).
+
 ### Milestone 7 — Walkthrough and release review
 
 - Run the ten-eligible/five-response demo and four-response withheld demo from `SPEC.md` §17; verify in both supported browsers and review all 27 scenario records, performance limits, recovery drills, network/log captures, and actual API payloads.

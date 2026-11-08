@@ -9,6 +9,8 @@
     "build": "tsc --project tsconfig.json"
   },
   "dependencies": {
+    "@iitgn-feedback/config": "0.1.0",
+    "@iitgn-feedback/http": "0.1.0",
     "@iitgn-feedback/protocol": "0.1.0",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.8",

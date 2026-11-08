@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { startClaimBridge, type BridgeState } from "./claim-bridge";
 import { SPIKE_POLL } from "./spike-poll";
+import { OrganiserApp } from "./organiser";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing portal root element");
@@ -36,5 +37,5 @@ function ClaimBridge() {
 }
 
 createRoot(root).render(
-  window.location.pathname === "/claim-bridge" ? <ClaimBridge /> : <main>Portal scaffold — no sign-in or poll features yet.</main>,
+  window.location.pathname === "/claim-bridge" ? <ClaimBridge /> : <OrganiserApp />,
 );

@@ -1,0 +1,45 @@
+import { expect,test } from "@playwright/test";
+
+const portal="https://portal.feedback.test:4173";
+const emails=["email",...Array.from({length:10},(_,i)=>`"demo-student${i+1}@iitgn.ac.in"`)].join("\r\n");
+
+test("CSV import, owner edit and plain-text question rendering work across both hosts",async({page})=>{
+  await page.goto(portal);
+  await page.getByRole("button",{name:"Sign in as organiser"}).click();
+  const title=`<img src=x onerror=alert(1)> Synthetic ${Date.now()}`;
+  await page.getByLabel("Poll title").fill(title);
+  await page.getByLabel("Eligibility emails").fill(`${emails}\r\n"outsider@example.org"`);
+  await page.getByLabel("Question 1 prompt").fill("How would you rate it?");
+  await page.getByRole("button",{name:"Save draft"}).click();
+  await expect(page.getByRole("alert")).toContainText("validation_failed (rows 12)");
+  await page.getByLabel("Eligibility emails").fill(emails);
+  await page.getByRole("button",{name:"Add question"}).click();
+  const second=page.getByRole("group",{name:"Question 2"});
+  await second.getByLabel("Question 2 prompt").fill("Choose one");
+  await second.getByLabel("Type").selectOption("single_choice");
+  await second.getByLabel("Option 1").fill("First option");
+  await second.getByLabel("Option 2").fill("Second option");
+  await page.getByRole("button",{name:"Add question"}).click();
+  const third=page.getByRole("group",{name:"Question 3"});
+  await third.getByLabel("Question 3 prompt").fill("Optional reflections");
+  await third.getByLabel("Type").selectOption("free_text");
+  await expect(third.getByLabel("Required")).toHaveCount(0);
+  await page.getByRole("button",{name:"Save draft"}).click();
+  await expect(page.getByText("Draft saved. Revision 1.")).toBeVisible();
+  const listing=page.getByRole("listitem").filter({hasText:title});
+  await listing.getByRole("button",{name:title}).click();
+  await page.getByLabel("Description").fill("Edited, with stable question IDs.");
+  await page.getByRole("button",{name:"Save changes"}).click();
+  await expect(page.getByText("Draft saved. Revision 2.")).toBeVisible();
+  const href=await listing.getByRole("link",{name:"Public poll link"}).getAttribute("href");
+  const dialog=page.waitForEvent("dialog").then((d)=>d.accept());
+  await listing.getByRole("button",{name:"Open poll"}).click();await dialog;
+  await page.goto(href!);
+  await expect(page.getByRole("heading",{name:title})).toBeVisible();
+  await expect(page.getByText("Choose one")).toBeVisible();
+  await expect(page.getByText("First option")).toBeVisible();
+  await expect(page.getByText("Optional reflections")).toBeVisible();
+  await expect(page.getByText("Free text may identify you.")).toBeVisible();
+  expect(await page.locator("img").count()).toBe(0);
+  await expect(page.getByText("Edited, with stable question IDs.")).toBeVisible();
+});

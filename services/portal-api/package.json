@@ -9,9 +9,14 @@
     "build": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "fastify": "5.12.8"
+    "@iitgn-feedback/protocol": "0.1.0",
+    "drizzle-orm": "0.45.4",
+    "fastify": "5.12.8",
+    "jsonc-parser": "3.3.1",
+    "pg": "8.23.1"
   },
   "devDependencies": {
-    "@types/node": "24.19.2"
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1"
   }
 }

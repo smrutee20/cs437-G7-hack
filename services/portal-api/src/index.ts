@@ -7,6 +7,11 @@ import { DraftValidationError } from "./draft.js";
 import { closePoll, openPoll, PollError, updateDraft } from "./poll-lifecycle.js";
 import { parseStrictJson } from "./strict-json.js";
 import { makeCursor, readCursor } from "./cursor.js";
+import { createSigningCapacity } from "./capacity.js";
+import { ClaimError, issueClaim, type ClaimErrorCode } from "./claim.js";
+import { loadPrivateKey } from "./keys.js";
+import { createAccountLimiter } from "./rate-limit.js";
+import type { SignerClient } from "./signer-client.js";
 
 type Session = { id: string; email?: string; isOrganiser: boolean; csrfToken: string };
 type Config = {
@@ -16,6 +21,15 @@ type Config = {
   cursorKey: Buffer;
   authenticate: (request: FastifyRequest) => Promise<Session | null>;
   acquireClient: () => Promise<{client: Client; release: () => Promise<void>}>;
+  /** Separate feedback_issuer pool and private signer. Without it, no claim route exists. */
+  issuer?: {
+    acquireClient: () => Promise<{client: Client; release: () => Promise<void>}>;
+    signer: SignerClient;
+  };
+};
+const CLAIM_STATUS: Record<ClaimErrorCode, number> = {
+  invalid_request:400, not_found:404, not_eligible:403, claim_consumed:409, poll_closed:410, poll_withdrawn:410,
+  capacity_unavailable:503, claim_consumed_no_credential:503, temporarily_unavailable:503,
 };
 class ApiError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }
@@ -62,7 +76,9 @@ export function createApp(config: Config) {
     }});
     let status=500, code="internal_error";
     if (cause instanceof ApiError) ({status,code}=cause);
-    else if (cause instanceof PollError) {
+    else if (cause instanceof ClaimError) {
+      ({code}=cause);status=CLAIM_STATUS[cause.code];
+    } else if (cause instanceof PollError) {
       code=cause.code;status=code==="not_found"?404:code==="validation_failed"?422:409;
     } else if (cause && typeof cause === "object" && "statusCode" in cause) {
       if (cause.statusCode === 413) {status=413;code="payload_too_large";}
@@ -206,5 +222,33 @@ export function createApp(config: Config) {
       return ownerPoll(client,user.id,req.params.id);
     });
   });
+  if (config.issuer) {
+    const issuer=config.issuer;
+    // SPEC.md §14 claim limits: two concurrent signs, ten waiting up to 2 s; five attempts/min/account.
+    const capacity=createSigningCapacity({concurrent:2,queue:10,waitMs:2000,healthy:()=>issuer.signer.healthy()});
+    const limiter=createAccountLimiter({limit:5,windowMs:60_000});
+    app.post<{Params:{id:string}}>("/api/v1/polls/:id/claim",{bodyLimit:2048},async(req,reply)=>{
+      const user=sessions.get(req)!;
+      if (typeof user.email!=="string") throw new ApiError(403,"forbidden");
+      const decision=limiter.attempt(user.id);
+      if (!decision.allowed) {
+        return reply.code(429).header("Retry-After",String(decision.retryAfterSeconds)).send(error("rate_limited"));
+      }
+      let lease: {client: Client; release: () => Promise<void>};
+      try {lease=await issuer.acquireClient();}
+      catch {throw new ClaimError("capacity_unavailable");}
+      try {
+        // Exactly one attempt: no automatic retry at any layer (SPEC.md §9).
+        const result=await issueClaim(lease.client,{id:user.id,email:user.email},req.params.id,req.body,{
+          reserve:capacity.reserve,
+          loadKey:(ref)=>loadPrivateKey(config.keyDirectory,config.encryptionKey,ref),
+          sign:(key,blinded)=>issuer.signer.sign(key,blinded),
+        });
+        return reply.code(201).send(result);
+      } finally {
+        await lease.release().catch(()=>{});
+      }
+    });
+  }
   return app;
 }

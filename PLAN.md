@@ -42,7 +42,7 @@ Every milestone starts `not started`. Mark `blocked` if a stated prerequisite fa
 | 0. Foundation | complete (with recorded caveats) | `SPEC.md` | Reproducible repository, two-origin test environment, working runners. |
 | 1. Feasibility | complete for synthetic development; 1.4 external checks blocked (release prerequisites) | 0 | Proven crypto/native signer and browser-host isolation; documented deployment feasibility. |
 | 2. Poll foundation | complete for synthetic development; production auth/operations deferred to 6 | 1 | Owner-only draft/open/closed lifecycle and public metadata using synthetic identities. |
-| 3. Anonymous issuance | not started | 2 | One durable blind claim per entitlement and reliable browser handoff. |
+| 3. Anonymous issuance | in progress (server issuance done; browser handoff not started) | 2 | One durable blind claim per entitlement and reliable browser handoff. |
 | 4. Anonymous redemption | not started | 3 | Exactly one accepted response per credential, with correct concurrent/retry semantics. |
 | 5. Results | not started | 4 | Closure-safe, threshold-compliant results and no raw-response organiser access. |
 | 6. Production boundaries | not started | 5 | Real OIDC, privacy-safe deployment and operations, retention/recovery gates. |
@@ -229,7 +229,7 @@ None of the "stop and revise SPEC.md" conditions occurred. **Recommendation: go 
 2. Hosting with two approved HTTPS hostnames, durable PostgreSQL, an encrypted private-key store, private signer network isolation, and edge/CDN/WAF/error logging configured per §15 (1.4).
 3. A signer container image and digest selected and pinned. Today only the npm `workerd` binary is pinned (1.2).
 4. Security review of the native private operation: BoringSSL `0.20261020.0` uses constant-time CRT with a fault check but **no RSA blinding** (1.2).
-5. Signer service-credential provisioning and rotation, plus an issuer-side `0 < m < n` check before claim consumption (Milestone 3).
+5. Signer service-credential provisioning and rotation (Milestone 3/6). The issuer-side `0 < m < n` check before claim consumption now exists and is tested (Milestone 3, slice 1).
 6. CI executed on a real remote. `.github/workflows/ci.yml` has never run (0.3).
 7. Production CSP/header set and HSTS from deployment (Milestone 6). Dev servers set only COOP, XFO, Referrer-Policy, and nosniff (1.3).
 8. Synthetic spike poll IDs removed from both apps (Milestones 2–3).
@@ -276,6 +276,67 @@ These are commitments, **not** a line-by-line task backlog yet. Before each mile
 - Add the response-origin credential state machine and portal bridge from Milestone 1, authenticated claim API, stable-account/email-entry uniqueness, durable claim-before-sign ordering, private signer access, error/uncertainty UX, and per-poll key binding.
 - Leading tests: one account or eligibility entry cannot obtain two signatures under concurrent claims; a blinded message for B signed through A does not verify with B's public key (full redemption check follows in Milestone 4); crash before/after commit never releases a signature early; losing the bridge result never triggers a second claim.
 - Exit: with synthetic identities, one eligible account can obtain and locally verify one poll-bound credential; unsupported storage/browser and uncertain issuance fail closed. Claim rows contain no credential material.
+
+**Slice 0 (claim context, prior session, recorded 2026-11-08):** found already implemented in the working tree, with no recorded evidence. `GET /polls/:id/claim-context` reads `public_polls` (`0002_claim_context.sql` grants it to `feedback_portal_admin`) and returns the `PublicPoll` DTO. `tests/db/portal-api.test.ts` asserts: draft 404, open 200 with exact DTO keys, no eligibility/claim/private-key fields, and 401 without a session. **No red was observed for it, so none is claimed.**
+
+**Slice 1 (atomic issuance service, 2026-11-08):**
+
+- `0003_claim_issuance.sql` (forward-only) adds `identity.claim_entitlement`. It is `SECURITY DEFINER` with a fixed `search_path` and `lock_timeout = 2s`; `EXECUTE` is granted only to `feedback_issuer`, and the issuer's direct `INSERT` on claims is revoked.
+  - It takes `FOR SHARE` on the poll and binds the poll to its key ID.
+  - Invalidated returns `poll_withdrawn`; closed or past-deadline (DB clock) returns `poll_closed`.
+  - It resolves eligibility only when the session's verified email equals the account's *current* `identity.users.email`. That is an interpretation of §5 "current verified email": a stale session gets `not_eligible`.
+  - `INSERT … ON CONFLICT DO NOTHING` lets both unique constraints arbitrate races.
+- `services/portal-api/src/claim.ts` order:
+  1. Strict framing, poll and key checks, plus canonical 384-byte and `0 < m < n` checks, all before any key load or reservation.
+  2. Reserve capacity, then load the key.
+  3. `READ COMMITTED` transaction with `SET LOCAL synchronous_commit = on` and 2 s lock/statement timeouts.
+  4. Commit, then exactly one sign call.
+  5. An independent `publicEncrypt(RSA_NO_PADDING)` public-operation check before releasing the signature.
+  6. The private-key buffer is wiped in `finally`.
+- Failure mapping:
+  - any failure before `COMMIT` is sent → `capacity_unavailable` (definitely not consumed);
+  - a `COMMIT` error → `temporarily_unavailable` (no signing, no compensation);
+  - a post-commit sign failure or fault → `claim_consumed_no_credential`.
+- Tests (`tests/db/claim.test.ts`):
+  - Focused red: 7/7 failed with `claim issuance not implemented`; green 7/7.
+  - A lock-wait race test was added after green and **passed first**, as regression verification. A holder owns `FOR UPDATE`, then closes, expires, or invalidates the poll, and the waiting claim observes the change.
+  - A redundant account pre-check was removed from the function before mutation testing.
+  - Mutation (15 mutants): 14 killed. They covered sign-before-commit, no `FOR SHARE`, no locked deadline/withdrawal check, no session-email match, plain `INSERT`, no public-operation check, no key wipe, treating commit failure as definite, no zero or upper range check, no key-ID match, no preflight closure check, and no release on failure. **Survivor:** removing `SET LOCAL synchronous_commit = on`. That mutant is equivalent here because the test DB enforces `on` globally; the line is kept as defense in depth.
+- The tests cover:
+  - concurrent claims: 8 by one account, and 4+4 by two accounts sharing one email, each produce exactly one signature and one row;
+  - the renamed-account and reassigned-address cases;
+  - a request blinded for poll B but sent to A not finalizing under B;
+  - a lost commit acknowledgement (claim durable, never signed, retry gets `claim_consumed`);
+  - a backend killed before commit (not consumed, never signed, retry succeeds);
+  - claim rows exactly `{poll_id,user_id,eligibility_id}`.
+
+**Slice 2 (claim route, admission, signer client, 2026-11-08):**
+
+- `capacity.ts` gives 2 concurrent signs, 10 waiting, a 2 s wait, and a health check before consumption. `rate-limit.ts` allows 5 attempts per sliding minute per user ID, in memory, with idle sweep.
+  - Unit red: 4 failures, "not implemented".
+  - Two failures after implementation were **wrong test expectations**: the sliding window permits five new attempts after expiry, and bob's idle entry is correctly swept. The test was corrected, not the code.
+  - A surviving mutant (timed-out waiter left queued) exposed a vacuous synchronous assertion; after the fix it is killed. All 3 capacity mutants are killed. Unit green 4/4.
+- `signer-client.ts` accepts only `http://127.0.0.1|[::1]` with no path/query/userinfo and a token ≥ 32 chars. It applies an `AbortSignal` timeout, sends the signer's exact member order, makes no retries, and fails generically with "signer unavailable".
+  - Red: 3/3 not implemented, against real workerd. Green: 3/3.
+  - An `afterAll` hook timeout came from stalled sockets left open by the test (a harness bug, not a red). Fixed.
+  - Mutants killed: any host, no timeout, short token.
+- `POST /api/v1/polls/:id/claim` exists only when `createApp` gets `issuer: {acquireClient, signer}`, a separate `feedback_issuer` pool. It applies the route `bodyLimit` 2048, then the existing session/Origin/CSRF/JSON guard, then the per-account limit (`429` + integer `Retry-After`), and maps errors per §13.
+  - `tests/db/claim-api.test.ts` red: 404, the route was missing. Green 3/3.
+  - Assertions: 201 with `{blindSignature}` only, finalized and verified through `claim-context` keys; repeat 409; 413; 400/404/410/403; unhealthy signer 503 `capacity_unavailable` with nothing consumed; sign failure 503 `claim_consumed_no_credential`; a sixth attempt 429; error bodies echo no email or blinded value.
+- Broader checks after slice 2: `npm run typecheck`, `npm run build`, unit 123/123, signer 31/31, DB 30/30, browser 28/28, and `FEEDBACK_ENABLE_SYNTHETIC_DEMO=yes-synthetic-only npm run test:demo-browser` 4/4 all passed. `npm audit` **could not run**: the audit endpoint returned an error (network). This slice added no dependencies.
+
+**Still open for the Milestone 3 exit:**
+
+- the response-origin IndexedDB state machine (`prepared`/`claim_sent`/`usable`/`claim_uncertain`) with Web Locks and read-back;
+- bridge `claim_request`/`claim_result`/`stored_ack`, the 2-minute same-result resend, `not_attempted`, and `login_required`;
+- browser failure modes (popup closed mid-claim, reload, storage write failure, concurrent tabs);
+- wiring the demo launcher to a real workerd signer and an issuer login role (the demo has **no** claim route today);
+- end-to-end enforcement of the 10 s request budget for claims;
+- replacing the spike poll IDs;
+- signer credential provisioning;
+- scenario 9 key-restart behavior through the route.
+
+No credential has been issued in a browser yet, so the Milestone 3 exit gate is **not** met.
 
 ### Milestone 4 — Anonymous redemption
 

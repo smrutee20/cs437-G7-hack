@@ -2,7 +2,7 @@
 // next to the poll title and asks for explicit confirmation. The press
 // animation starts only after that confirmation and never delays the request.
 import { useEffect, useRef, useState } from "react";
-import { BadgeIcon, Button, MarqueeLights, prefersReducedMotion, Press } from "@iitgn-feedback/ui";
+import { BadgeIcon, Button, buttonClass, MarqueeLights, prefersReducedMotion, Press } from "@iitgn-feedback/ui";
 import { postClaim, startClaimBridge, type BridgeContext, type BridgeController, type BridgeView } from "./claim-bridge";
 import styles from "./Portal.module.css";
 
@@ -29,7 +29,7 @@ const REFUSED: Record<string, string> = {
   claim_consumed_no_credential: "Your claim was used, but the portal could not stamp the envelope. No replacement can be issued.",
   rate_limited: "Too many attempts. Wait a minute and try again from the response page. Nothing was stamped.",
   capacity_unavailable: "The portal is busy. Nothing was stamped; try again shortly from the response page.",
-  login_required: "Your portal session ended. Sign in in another tab, then open the claim window again. Nothing was stamped.",
+  login_required: "You are not signed in to the portal. Sign in in another tab, then return to the response tab and choose “Open claim window” again. Nothing was stamped.",
   poll_closed: "This poll has closed. Nothing was stamped.",
   poll_withdrawn: "This poll was withdrawn. Nothing was stamped.",
   not_attempted: "Cancelled. Nothing was stamped and your claim was not used.",
@@ -96,5 +96,8 @@ export function ClaimBridge() {
       <Button variant="secondary" onClick={() => controller.current?.cancel()}>Cancel</Button>
     </div>}
     {state === "claiming" && <Button variant="primary" disabled block>Stamping…</Button>}
+    {state === "stored" && view?.outcome === "login_required" && <div className={styles.actions}>
+      <a className={buttonClass("primary")} href="/signed-in" target="_blank" rel="noopener noreferrer">Sign in to portal</a>
+    </div>}
   </main>;
 }

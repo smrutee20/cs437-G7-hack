@@ -72,7 +72,8 @@ export async function startPortalServer(config: PortalConfig, options: { fronten
       serverFactory: httpsServerFactory({ cert, key }),
     });
     registerFrontend(app, bundle, [
-      { path: "/", opener: "isolated" }, { path: "/signed-in", opener: "isolated" }, { path: "/claim-bridge", opener: "bridge" },
+      { path: "/", opener: "isolated" }, { path: "/signed-in", opener: "isolated" },
+      { path: "/about", opener: "isolated" }, { path: "/claim-bridge", opener: "bridge" },
     ]);
     applyRequestBudget(app);
 

@@ -17,6 +17,7 @@ playwright-report/
 *.pfx
 *.crt
 *.der
+client_secret_*.apps.googleusercontent.com.json
 .certs/
 certs/
 

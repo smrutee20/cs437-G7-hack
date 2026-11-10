@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew Feedback loopback TLS certificates if expiring
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/feedback/current/deploy/aws/renew-internal-tls.sh
+NoNewPrivileges=yes
+LimitCORE=0

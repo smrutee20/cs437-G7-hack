@@ -127,7 +127,11 @@ export function startClaimBridge(options: BridgeOptions): BridgeController {
       set("stored");
       stopped = true;
       window.removeEventListener("message", onMessage);
-      window.setTimeout(() => window.close(), Math.max(0, Math.min(5000, options.closeDelayMs?.() ?? 0)));
+      // A missing portal session needs a readable sign-in path, not a popup
+      // that vanishes before the participant can understand what happened.
+      if (delivered !== "login_required") {
+        window.setTimeout(() => window.close(), Math.max(0, Math.min(5000, options.closeDelayMs?.() ?? 0)));
+      }
     }
   };
 

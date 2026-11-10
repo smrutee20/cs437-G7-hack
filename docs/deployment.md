@@ -1,6 +1,6 @@
 # Deployment and operations runbook
 
-**Status: not deployed.** Everything below is implemented and tested locally against synthetic accounts, a disposable PostgreSQL and the two `.test` HTTPS hostnames. No production hosting, Google OAuth client, institutional account, ingress, backup system or container image has been chosen or verified. [`SPEC.md`](../SPEC.md) §18 forbids real participants until the release checklist at the end is complete. Where this runbook says "must", the requirement comes from the spec; where it says "not verified", nobody has checked it on real infrastructure.
+**Deployment:** A single-instance Lightsail proof of concept serves both HTTPS origins; its concrete configuration and operational commands are in [`aws-deployment.md`](aws-deployment.md). The local acceptance evidence below does not validate the privacy guarantees of that deployment. [`SPEC.md`](../SPEC.md) §18 forbids real participants until the release checklist at the end is complete. Where this runbook says "must", the requirement comes from the spec; where it says "not verified", nobody has checked it on real infrastructure.
 
 ## 1. Topology
 
@@ -139,9 +139,9 @@ Every purge is journaled.
 
 | Gate | Status |
 | --- | --- |
-| Institutional OAuth client authorised; real signed `email`/`hd` claims observed | **Blocked**: no client, admin contact or institutional test account. The verifier is tested only against a local RS256 test IdP. |
-| Two approved HTTPS hostnames; logging-compliant ingress/CDN/WAF | **Blocked**: no hosting chosen. |
-| Durable PostgreSQL and encrypted private-key store; 7-day encrypted backups | **Blocked**: implemented for local disks only. |
+| Institutional OAuth client authorised; real signed `email`/`hd` claims observed | **Blocked for release**: Google Web client configured and redirect tested, but no institutional sign-in/token verified yet. |
+| Two approved HTTPS hostnames; logging-compliant ingress/CDN/WAF | Two hostnames live on Lightsail with Caddy (no access log); full ingress/privacy review not done. |
+| Durable PostgreSQL and encrypted private-key store; 7-day encrypted backups | PostgreSQL and encrypted keys on Lightsail disk; off-instance encrypted backups not configured. |
 | Signer container image and digest; security sign-off on the no-blinding private operation | **Blocked**. |
 | Signer service-credential provisioning and rotation | Not done (per-run token in the demo only). |
 | CI executed on a real remote | Done for synthetic/local validation: all six jobs passed on `main` ([run 42506531372](https://github.com/nishchaybhutoria/iitgn-feedback-booth/actions/runs/42506531372)); no deployed infrastructure was tested. |

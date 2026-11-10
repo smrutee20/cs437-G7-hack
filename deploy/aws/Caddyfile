@@ -1,0 +1,36 @@
+# Caddy obtains and renews public HTTPS certificates. Access logs are disabled
+# (no `log` directive). The application listeners use private TLS on loopback.
+{
+    admin off
+}
+
+portal.freedback.tech {
+    reverse_proxy https://127.0.0.1:4173 {
+        header_up Host portal.freedback.tech
+        transport http {
+            tls_trusted_ca_certs /etc/feedback/tls/internal-ca.crt
+            tls_server_name portal.freedback.tech
+        }
+    }
+}
+
+respond.freedback.tech {
+    reverse_proxy https://127.0.0.1:4174 {
+        header_up Host respond.freedback.tech
+        header_up -Cookie
+        header_up -Authorization
+        header_up -User-Agent
+        header_up -Forwarded
+        header_up -X-Forwarded-For
+        header_up -X-Forwarded-Host
+        header_up -X-Forwarded-Proto
+        header_up -Traceparent
+        header_up -Tracestate
+        header_up -Baggage
+        header_up -X-Request-Id
+        transport http {
+            tls_trusted_ca_certs /etc/feedback/tls/internal-ca.crt
+            tls_server_name respond.freedback.tech
+        }
+    }
+}

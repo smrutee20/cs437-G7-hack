@@ -8,4 +8,7 @@
   padding: 7px 14px 7px 10px; font-size: 13px; color: #d4d4d4; max-width: 100%; }
 .badge { border-color: var(--border-strong); background: var(--surface-raised); color: #e6e6e6; padding: 6px 14px 6px 8px; }
 .badgeText { overflow-wrap: anywhere; }
-.right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.navLink { font-size: 14px; color: var(--text-secondary); text-decoration: none; }
+.navLink:hover, .navLink[aria-current="page"] { color: var(--text); text-decoration: underline; }
+.navLink:focus-visible { outline-offset: 4px; }

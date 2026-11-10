@@ -1,0 +1,24 @@
+[Unit]
+Description=Feedback portal HTTPS server
+After=network-online.target docker.service feedback-signer.service
+Requires=feedback-signer.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=feedback-portal
+Group=feedback-portal
+WorkingDirectory=/opt/feedback/current
+EnvironmentFile=/etc/feedback/portal.env
+ExecStart=/usr/local/bin/node /opt/feedback/current/services/portal-api/dist/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/feedback/keys /var/lib/feedback/journal.jsonl
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

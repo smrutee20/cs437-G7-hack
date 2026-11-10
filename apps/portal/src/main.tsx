@@ -2,6 +2,7 @@ import "@iitgn-feedback/ui/styles.css";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, buttonClass, Card, IdentityChip, NotFound, Press, SiteHeader, WarningPlate } from "@iitgn-feedback/ui";
+import { About } from "./About";
 import { ClaimBridge } from "./Bridge";
 import { OrganiserApp, type Session } from "./Organiser";
 import styles from "./Portal.module.css";
@@ -67,7 +68,9 @@ function App() {
   const path = window.location.pathname;
   const { session, error, refresh, clear } = useSession();
   if (path === "/claim-bridge") return <ClaimBridge />;
-  const header = <SiteHeader site="Organiser portal">{session && <IdentityChip email={session.user.email} />}</SiteHeader>;
+  const header = <SiteHeader site="Organiser portal" aboutHref="/about" aboutActive={path === "/about"}>
+    {session && <IdentityChip email={session.user.email} />}</SiteHeader>;
+  if (path === "/about") return <>{header}<About /></>;
   if (path !== "/" && path !== "/signed-in") return <>{header}<NotFound /></>;
   if (session === undefined) return <>{header}<main className={styles.workspace}><p className={styles.meta}>Checking portal session…</p></main></>;
   if (!session) return <>{header}{error && <p role="alert" className={styles.error}>{error}</p>}

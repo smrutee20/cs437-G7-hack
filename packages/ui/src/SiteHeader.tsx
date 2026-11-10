@@ -6,11 +6,17 @@ export function BrandMark() {
     <polygon points="14,3 25,9 14,15 3,9" /><polygon points="3,9 14,15 14,26 3,20" /><polygon points="14,15 25,9 25,20 14,26" />
     <line x1="5.5" y1="13.5" x2="11.5" y2="17" /></g></svg>;
 }
-export function SiteHeader({ site, children }: { site?: string; children?: ReactNode }) {
+export function SiteHeader({ site, aboutHref, aboutActive, aboutNewTab, children }: {
+  site?: string; aboutHref?: string; aboutActive?: boolean; aboutNewTab?: boolean; children?: ReactNode;
+}) {
   return <header className={styles.header}><div className={styles.inner}>
-    <a className={styles.brand} href="/"><BrandMark /><span className={styles.name}>IITGN Feedback</span>
+    <a className={styles.brand} href="/"><BrandMark /><span className={styles.name}>IITGN Freed Back</span>
       {site && <><span className={styles.rule} aria-hidden="true" /><span className={styles.site}>{site}</span></>}</a>
-    {children && <div className={styles.right}>{children}</div>}
+    {(aboutHref || children) && <div className={styles.right}>
+      {aboutHref && <a className={styles.navLink} href={aboutHref} aria-current={aboutActive ? "page" : undefined}
+        target={aboutNewTab ? "_blank" : undefined} rel={aboutNewTab ? "noopener noreferrer" : undefined}>About</a>}
+      {children}
+    </div>}
   </div></header>;
 }
 /** Response site: makes it explicit that this window does not know who you are. */

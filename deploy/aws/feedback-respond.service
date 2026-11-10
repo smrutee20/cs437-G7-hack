@@ -1,0 +1,22 @@
+[Unit]
+Description=Feedback response HTTPS server
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=feedback-respond
+Group=feedback-respond
+WorkingDirectory=/opt/feedback/current
+EnvironmentFile=/etc/feedback/respond.env
+ExecStart=/usr/local/bin/node /opt/feedback/current/services/respond-api/dist/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

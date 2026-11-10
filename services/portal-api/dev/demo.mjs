@@ -223,7 +223,8 @@ async function start() {
   });
   if (built) {
     registerFrontend(portal,await loadBundle(resolve(repo,"apps/portal/dist-demo"),{production:false}),[
-      {path:"/",opener:"isolated"},{path:"/signed-in",opener:"isolated"},{path:"/claim-bridge",opener:"bridge"}]);
+      {path:"/",opener:"isolated"},{path:"/signed-in",opener:"isolated"},{path:"/about",opener:"isolated"},
+      {path:"/claim-bridge",opener:"bridge"}]);
     registerFrontend(respond,await loadBundle(resolve(repo,"apps/respond/dist"),{production:true}),[
       {path:"/",opener:"isolated"},{path:"/p/:pollId",opener:"bridge",accept:(params)=>/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(params.pollId)}]);
     respond.addHook("onSend",async(_request,reply,payload)=>{reply.removeHeader("Set-Cookie");return payload;});

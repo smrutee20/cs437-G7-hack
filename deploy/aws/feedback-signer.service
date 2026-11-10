@@ -1,0 +1,24 @@
+[Unit]
+Description=Feedback native signer
+After=network.target
+Before=feedback-portal.service
+
+[Service]
+Type=simple
+User=feedback-signer
+Group=feedback-signer
+WorkingDirectory=/opt/feedback/current/services/signer
+EnvironmentFile=/etc/feedback/signer.env
+ExecStart=/opt/feedback/current/node_modules/@cloudflare/workerd-linux-64/bin/workerd serve config.capnp --socket-addr http=127.0.0.1:8790
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+IPAddressDeny=any
+IPAddressAllow=localhost
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

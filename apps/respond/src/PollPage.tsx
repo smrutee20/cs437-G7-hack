@@ -283,6 +283,8 @@ function PollBooth({ poll, onClosed }: { poll: PublicPoll; onClosed: (invalidate
         {open && (state === "none" || state === "prepared") && <WarningPlate>{LOSS_WARNING}</WarningPlate>}
         {open && state === "usable" && <WarningPlate>{SUBMIT_WARNING}</WarningPlate>}
         {primary}
+        {open && state === "prepared" && <p className={styles.status}>Not signed in yet? <a href={`${__PORTAL_ORIGIN__}/signed-in`}
+          target="_blank" rel="noopener noreferrer">Sign in to portal</a> in another tab, then return here to open the claim window.</p>}
         <p className={styles.status} data-testid="claim-window" data-state={win.state} data-rejected={win.rejected}>
           {WINDOW_TEXT[win.state as ClaimWindowState] ?? ""}</p>
         <p className={styles.status} data-testid="claim-message" role="status">{message}</p>

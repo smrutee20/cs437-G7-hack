@@ -22,13 +22,14 @@
 .editorFields { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
 .editorTitle { font: var(--text-heading); padding: 0; margin-bottom: 4px; overflow-wrap: anywhere; }
 .warnList { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
-.field { display: flex; flex-direction: column; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: #d4d4d4; flex: 1 1 260px; min-width: 0; }
+.field { display: flex; flex-direction: column; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: #d4d4d4; min-width: 0; }
 .input, .textarea { width: 100%; background: var(--surface-sunken); color: var(--text); border: 1px solid #333333; border-radius: var(--radius-control);
   padding: 12px 14px; font-size: 15px; font-weight: 400; letter-spacing: 0; line-height: 1.5; }
 .textarea { resize: vertical; }
 .input:disabled, .textarea:disabled { opacity: 0.65; }
 select.input { appearance: auto; }
 .fieldRow { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
+.fieldRow > .field { flex: 1 1 260px; }
 .sectionTitle { font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); margin-top: 6px; }
 .questionEditor { border: 1px solid #262626; border-radius: var(--radius-card); background: #121212; margin: 0; padding: 18px 20px;
   display: flex; flex-direction: column; gap: 14px; min-width: 0; }
@@ -95,3 +96,13 @@ select.input { appearance: auto; }
 .signIn { max-width: 980px; margin: 0 auto; padding: 40px 24px 96px; display: flex; flex-wrap: wrap; gap: 32px; align-items: center; justify-content: center; }
 .signInArt { flex: 0 1 320px; max-width: 320px; }
 .signInCard { flex: 1 1 420px; max-width: 560px; }
+
+.about { max-width: 980px; margin: 0 auto; padding: 44px 24px 96px; display: flex; flex-direction: column; gap: 28px; }
+.aboutIntro { max-width: 740px; display: flex; flex-direction: column; gap: 14px; }
+.aboutLead { font-size: 18px; line-height: 1.6; color: var(--text-secondary); }
+.aboutGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 16px; }
+.aboutCard { border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); padding: 24px;
+  display: flex; flex-direction: column; gap: 12px; }
+.aboutCard p { color: var(--text-secondary); line-height: 1.65; }
+.aboutCard h2 { font-size: 19px; line-height: 1.3; }
+.aboutBack { align-self: flex-start; }

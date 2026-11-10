@@ -2,7 +2,7 @@
 
 Reviewed 2026-11-08 on branch `foundation-feasibility`.
 
-**Verdict: the synthetic local demo meets its exit criteria. A real-participant release is blocked** by external gates that nobody here can satisfy: the institutional Google OAuth client, approved hosting with compliant logging, production backups and storage, a signer container digest, and security sign-off on the native private operation. Nothing below is evidence about a deployment. It is evidence about this code, on loopback, with invented accounts.
+**Verdict at review time: the synthetic local demo meets its exit criteria. A real-participant release is blocked.** Since this review, the two HTTPS origins and a Google Web OAuth client have been configured on Lightsail; institutional login, off-instance backups, ingress/privacy review, a signer image digest and security sign-off are still outstanding. The test evidence below is from loopback with invented accounts, not from the deployed infrastructure. See [aws-deployment.md](aws-deployment.md) for deployment observations.
 
 ## Evidence run
 
@@ -25,7 +25,7 @@ All on one machine (Node 24.19.0, PostgreSQL 17 in Compose, Chromium 158.0.8127.
 
 | # | Scenario | Evidence | Status |
 | --- | --- | --- | --- |
-| 1 | OIDC verification and login failures | `tests/db/oidc.test.ts`: local RS256 IdP covering 18 token failures, reused state, login CSRF, expiry, unsafe return paths, valid login. 9 mutants killed. | **Blocked for release**: no real Google client or institutional token |
+| 1 | OIDC verification and login failures | `tests/db/oidc.test.ts`: local RS256 IdP covering 18 token failures, reused state, login CSRF, expiry, unsafe return paths, valid login. 9 mutants killed. | **Blocked for release**: client configured, but no institutional token verified |
 | 2 | Stable `(issuer, sub)`; alternate/reassigned addresses | `oidc.test.ts` (email change keeps the user), `claim.test.ts` (renamed account, reassigned address, stale session email) | Local |
 | 3 | Organiser isolation, mass assignment | `portal-api.test.ts`, `results-api.test.ts`, `delete-draft.test.ts`, `privileges.test.ts` (the portal role cannot change owner or withdrawal at the DB level) | Local |
 | 4 | CSRF/Origin on every mutation; no mock login or relaxed policy in production | `csrf-routes.test.ts` (7 routes × 5 variants), `production-config.test.ts`, `production-server.test.ts`, build bundle gate | Local |
@@ -39,7 +39,7 @@ All on one machine (Node 24.19.0, PostgreSQL 17 in Compose, Chromium 158.0.8127.
 | 12 | Lost ack, deadline-crossing retry | `redeem.test.ts`, `submit.spec.ts` | Local |
 | 13 | Claim/submit vs close/deadline/invalidation/publication | `poll-lifecycle.test.ts`, `claim.test.ts`, `redeem.test.ts`, `results.test.ts`, `operations.test.ts`; deadline enforced with the scheduler stopped | Local |
 | 14 | Revision conflicts; frozen content; no reopening | `poll-lifecycle.test.ts`, `foundation.test.ts`, `privileges.test.ts` | Local |
-| 15 | Cookie and hostname isolation | `origins.spec.ts`, `origins.test.ts`, `production-server.test.ts` (response host strips cookies and sets none), `poll-foundation.spec.ts` | Local; real hostnames **blocked** |
+| 15 | Cookie and hostname isolation | `origins.spec.ts`, `origins.test.ts`, `production-server.test.ts` (response host strips cookies and sets none), `poll-foundation.spec.ts` | Local tests; public hostnames live but full isolation review pending |
 | 16 | Bridge spoofing, popups, interruptions | `bridge.spec.ts`, `claim.spec.ts`, `claim-interruptions.spec.ts`, `popup-blocker.spec.ts` | Local (gaps below) |
 | 17 | Browser storage across states | `claim.spec.ts`, `submit.spec.ts`, `draft.spec.ts` | Local |
 | 18 | Hostile content; CSP; opener in real builds | `results.spec.ts`, `poll-content.spec.ts`, `csp.spec.ts` (production bundles, zero violations, enforcement proven) | Local |

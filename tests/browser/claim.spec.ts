@@ -95,16 +95,31 @@ test("cancelling in the bridge sends nothing to the server and permits an explic
   expect(calls).toHaveLength(1);
 });
 
-test("signed out, the bridge asks for sign-in and the response returns to prepared without a claim", async ({ page, context }) => {
+test("signed out, the bridge offers a separate portal sign-in without consuming a claim", async ({ page, context }) => {
   const poll = syntheticPoll();
   const { calls } = await stubApis(context, poll, { signedIn: false });
   await prepared(page, poll);
+  const preflight = page.getByRole("link", { name: "Sign in to portal" });
+  await expect(preflight).toHaveAttribute("href", `${portal}/signed-in`);
+  await expect(preflight).toHaveAttribute("target", "_blank");
+  await expect(preflight).toHaveAttribute("rel", /noopener/);
   const popup = await openBridge(page);
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
   await expect(page.getByTestId("claim-message")).toContainText("Sign in to the portal");
-  // The bridge answered login_required without any HTTP attempt, then closed on stored_ack.
-  await expect.poll(() => popup.isClosed()).toBe(true);
+  // The bridge answered login_required without any HTTP attempt. It must stay readable after stored_ack.
+  const signIn = popup.getByRole("link", { name: "Sign in to portal" });
+  await expect(signIn).toHaveAttribute("href", "/signed-in");
+  await expect(signIn).toHaveAttribute("target", "_blank");
+  await expect(signIn).toHaveAttribute("rel", /noopener/);
+  await expect(popup.getByTestId("bridge")).toContainText("return to the response tab");
+  expect(popup.isClosed()).toBe(false);
+  const [signInTab] = await Promise.all([context.waitForEvent("page"), signIn.click()]);
+  await expect(signInTab).toHaveURL(`${portal}/signed-in`);
+  await expect(signInTab.getByRole("heading", { name: "Portal sign-in" })).toBeVisible();
+  await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
   expect(calls).toHaveLength(0);
+  await signInTab.close();
+  await popup.close();
 });
 
 test("a consumed entitlement is terminal for this browser and erases the secret", async ({ page, context }) => {

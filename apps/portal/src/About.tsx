@@ -21,7 +21,7 @@ export function About() {
       </section>
       <section className={styles.aboutCard} aria-labelledby="about-results">
         <h2 id="about-results">Patterns, not live tracking</h2>
-        <p>Organisers see no live response count or individual response feed. Results appear only when the poll closes and at least five responses were received. Each question needs five answers to be shown; otherwise its results are withheld.</p>
+        <p>Organisers see no live response count or individual response feed. New polls show results only after closure and at least one response. Questions without answers stay withheld. Polls opened under the earlier policy retain their five-response/five-answer thresholds. A single eligible person or answer may identify who responded, even without a name attached to the response.</p>
       </section>
       <section className={styles.aboutCard} aria-labelledby="about-control">
         <h2 id="about-control">Your browser holds the key</h2>

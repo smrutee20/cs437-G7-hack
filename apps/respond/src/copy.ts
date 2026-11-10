@@ -5,13 +5,14 @@ import type { SubmitOutcome } from "./submit-flow";
 
 export const PRIVACY_NOTICE = "Your institutional account is checked to issue one credential. The response service does not require sign-in, " +
   "and answers are not stored with your account identity. A credential can be used once and can be lost or shared. Do not include " +
-  "identifying details in your answers. Free text, small result categories, outside knowledge, and network metadata may reveal you. " +
+  "identifying details in your answers. A single eligible participant or answer may identify you to the organiser. Free text, " +
+  "small result categories, outside knowledge, and network metadata may reveal you. " +
   "The platform and its infrastructure must be trusted. This is not an election system or a guarantee of absolute anonymity.";
 export const LOSS_WARNING = "A credential can be used once and can be lost or shared. It is kept only in this browser's storage: clearing " +
   "site data, private browsing or losing this device loses it, and it can't be replaced for this poll. Don't claim right before the deadline.";
 export const TEXT_WARNING = "Free text may identify you. Do not include identifying details in your answers; readers may make inferences from what you say.";
 export const SUBMIT_WARNING = "Before you submit: do not include identifying details. Free text, small result categories, outside knowledge, " +
-  "and network metadata may reveal you.";
+  "a single eligible person or answer, and network metadata may reveal you.";
 export const SUCCESS_BODY = "Your saved credential and answers were erased from this browser. There is no receipt or response ID, by design.";
 
 export const WINDOW_TEXT: Partial<Record<ClaimWindowState, string>> = {

@@ -20,10 +20,12 @@ const publicDb = new Client({ connectionString: url });
 let directory: string;
 
 type Q = { id: string; type: string; prompt: string; required: boolean; options?: { id: string; label: string }[] };
-async function openedPoll(questions: Q[]) {
+async function openedPoll(questions: Q[], options: { eligible?: number; legacy?: boolean } = {}) {
   const { id } = await createDraft(portal, owner, { title: "Results", description: "",
     closesAt: new Date(Date.now() + 86_400_000).toISOString(), questions,
-    eligibilityEmails: Array.from({ length: 10 }, (_, i) => `student${i}@iitgn.ac.in`) }, directory, master);
+    eligibilityEmails: Array.from({ length: options.eligible ?? 10 }, (_, i) => `student${i}@iitgn.ac.in`) }, directory, master);
+  if (options.legacy) await observer.query(
+    "UPDATE polls SET policy_version=1,min_responses=5,min_answers_per_question=5 WHERE id=$1", [id]);
   await openPoll(portal, owner, id, 1);
   const key = (await observer.query("SELECT key_id, public_jwk, private_secret_ref FROM signing_keys WHERE poll_id=$1", [id])).rows[0];
   const der = await loadPrivateKey(directory, master, key.private_secret_ref);
@@ -54,9 +56,33 @@ afterAll(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-test("results are refused before closure, hidden from other organisers, and four responses are withheld permanently", async () => {
+test("a single eligible address can receive a single-answer result after closure; zero responses remain withheld", async () => {
+  const choice = choiceQ(), text = textQ();
+  const poll = await openedPoll([choice, text], { eligible: 1 });
+  expect(await readResults(portal, owner, poll.id)).toEqual({ outcome: "results_not_closed" });
+  await poll.submit([{ questionId: choice.id, value: choice.options[0].id }, { questionId: text.id, value: "Only answer" }]);
+  await closePoll(portal, owner, poll.id);
+  const { result } = await readResults(portal, owner, poll.id) as { result: any };
+  expect(result).toMatchObject({ state: "ready", totalResponses: 1, questions: [
+    { state: "published", type: "single_choice", answeredCount: 1, options: [
+      { optionId: choice.options[0].id, count: 1, percentage: 100 },
+      { optionId: choice.options[1].id, count: 0, percentage: 0 },
+      { optionId: choice.options[2].id, count: 0, percentage: 0 } ] },
+    { state: "published", type: "free_text", answeredCount: 1, texts: ["Only answer"] },
+  ] });
+  const skipped = await openedPoll([choice, text], { eligible: 1 });
+  await skipped.submit([{ questionId: choice.id, value: choice.options[0].id }]);
+  await closePoll(portal, owner, skipped.id);
+  const skippedResult = await readResults(portal, owner, skipped.id) as { result: any };
+  expect(skippedResult.result.questions[1]).toEqual({ questionId: text.id, state: "withheld", reason: "insufficient_answers" });
+  const empty = await openedPoll([choice], { eligible: 1 });
+  await closePoll(portal, owner, empty.id);
+  expect(await readResults(portal, owner, empty.id)).toEqual({ outcome: "ready", result: { state: "withheld", reason: "insufficient_responses" } });
+});
+
+test("legacy polls keep their frozen five-response/five-answer thresholds", async () => {
   const choice = choiceQ();
-  const poll = await openedPoll([choice]);
+  const poll = await openedPoll([choice], { legacy: true });
   for (let i = 0; i < 4; i++) await poll.submit([{ questionId: choice.id, value: choice.options[0].id }]);
   expect(await readResults(portal, owner, poll.id)).toEqual({ outcome: "results_not_closed" });
   expect(await readResults(portal, other, poll.id)).toEqual({ outcome: "not_found" });
@@ -73,9 +99,9 @@ test("results are refused before closure, hidden from other organisers, and four
   await expect(publicDb.query("SELECT * FROM anonymous.result_snapshots")).rejects.toMatchObject({ code: "42501" });
 });
 
-test("five responses publish exact aggregates in schema order; a question with four answers is withheld", async () => {
+test("legacy five-response polls publish exact aggregates in schema order; four answers are withheld", async () => {
   const choice = choiceQ(), rating = ratingQ(), sparse = ratingQ(), text = textQ();
-  const poll = await openedPoll([choice, rating, sparse, text]);
+  const poll = await openedPoll([choice, rating, sparse, text], { legacy: true });
   const [a, b, c] = choice.options.map((option) => option.id);
   const rows: [string, number, number | null, string | null][] = [
     [a, 1, 5, "Great"], [a, 1, 4, "Great"], [b, 2, 3, "Too long"], [b, 3, 2, null], [b, 3, null, "Fine"],

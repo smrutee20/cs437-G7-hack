@@ -4,3 +4,4 @@ export * from "./bridge.js";
 export * from "./text.js";
 export * from "./answers.js";
 export * from "./strict-json.js";
+export * from "./policy.js";

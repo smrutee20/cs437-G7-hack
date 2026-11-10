@@ -1,5 +1,5 @@
 // Synthetic walkthrough (SPEC.md §17, scenario 27): ten eligible accounts, five
-// anonymous responses → ready results; four responses → permanently withheld.
+// anonymous responses → ready results; small groups are explicitly identifiable.
 // Hostile free text must render as inert text in the organiser's view.
 import { randomUUID } from "node:crypto";
 import { expect, test, type Browser, type Page } from "@playwright/test";
@@ -51,7 +51,7 @@ async function closeAndView(organiser: Page, title: string) {
   return organiser.getByRole("region", { name: "Results" });
 }
 
-test("five synthetic responses publish inert aggregate results; four are permanently withheld", async ({ browser }) => {
+test("small and large polls publish inert results after closure", async ({ browser }) => {
   test.setTimeout(120_000);
   // Per-project account ranges: projects run in parallel against one launcher and its per-account claim limit.
   const base = test.info().project.name.includes("firefox") ? 20 : 0;
@@ -73,9 +73,8 @@ test("five synthetic responses publish inert aggregate results; four are permane
   await expect(results).toContainText("5 responses");
   await expect(results).toContainText("Morning: 3 (60.0%)");
   await expect(results).toContainText("Evening: 2 (40.0%)");
-  // Three texts is below the five-answer question threshold: withheld, with no texts shown.
-  await expect(results).toContainText("Withheld: fewer than five answers");
-  await expect(results).not.toContainText("evil.example");
+  // Three texts now publish. Hostile content is rendered literally, never executed.
+  for (const hostile of HOSTILE) await expect(results.getByText(hostile, { exact: true })).toBeVisible();
   expect(await organiser.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
 
   // A second poll where five people answer the free text: hostile strings are shown literally.
@@ -93,7 +92,7 @@ test("five synthetic responses publish inert aggregate results; four are permane
   expect(await organiser.evaluate(() => (window as { __xss?: number }).__xss)).toBeUndefined();
   expect(requests.filter((url) => url.includes("evil.example"))).toEqual([]);
 
-  // Four responses: permanently withheld, with no count disclosed.
+  // Four responses also publish under the new policy.
   const smallTitle = `Walkthrough small ${Date.now()}`;
   const smallPoll = await openPoll(organiser, smallTitle, [choice]);
   for (let i = 0; i < 4; i++) {
@@ -102,8 +101,6 @@ test("five synthetic responses publish inert aggregate results; four are permane
     });
   }
   const small = await closeAndView(organiser, smallTitle);
-  await expect(small.getByText("Results are permanently withheld: fewer than five responses were received.")).toBeVisible();
-  await expect(small.getByRole("img", { name: "Withheld" })).toBeVisible();
-  // No numeric count of any kind: neither a "N responses" line nor "N answered".
-  await expect(small).not.toContainText(/\b\d+ (responses|answered)\b/);
+  await expect(small).toContainText("4 responses");
+  await expect(small).toContainText("Morning: 4 (100.0%)");
 });

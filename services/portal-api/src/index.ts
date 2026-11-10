@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import Fastify, { type FastifyRequest, type FastifyServerFactory } from "fastify";
 import type { Client } from "pg";
-import { isCanonicalUuidV4, parseStrictJson } from "@iitgn-feedback/protocol";
+import { isCanonicalUuidV4, parseStrictJson, pollPolicy } from "@iitgn-feedback/protocol";
 import { createDraft } from "./create-draft.js";
 import { deleteDraft } from "./delete-draft.js";
 import { DraftValidationError, validateDraftInput } from "./draft.js";
@@ -114,7 +114,7 @@ export function createApp(config: Config) {
     const {rows}=await client.query(
       `WITH deadline_clock AS MATERIALIZED (SELECT clock_timestamp() AS instant)
        SELECT p.id,p.title,p.description,p.invalidated,p.created_at,p.opened_at,p.closes_at,
-              p.revision,p.questions,p.eligible_count,
+              p.revision,p.questions,p.eligible_count,p.policy_version,
               eligibility_expired(p.state,p.closes_at,p.closed_at) AS eligibility_purged,
               CASE WHEN p.state='open' AND deadline_clock.instant >= p.closes_at THEN 'closed' ELSE p.state END AS effective_state,
               CASE WHEN p.state='open' AND deadline_clock.instant >= p.closes_at THEN p.closes_at ELSE p.closed_at END AS effective_closed_at
@@ -134,7 +134,7 @@ export function createApp(config: Config) {
       closedAt:p.effective_closed_at?.toISOString()??null,
       closesAt:p.closes_at.toISOString(),revision:p.revision,questions:p.questions,
       eligibleCount:p.eligible_count,eligibilityEmails:emails,eligibilityRetention:emails===null?"purged":"retained",
-      policy:{version:1,minEligible:10,minResponses:5,minAnswersPerQuestion:5},
+      policy:pollPolicy(p.policy_version),
     };
   };
   if (config.auth) {
@@ -194,7 +194,7 @@ export function createApp(config: Config) {
       const {rows}=await client.query(
         `WITH deadline_clock AS MATERIALIZED (SELECT clock_timestamp() AS instant)
          SELECT p.id,p.title,p.description,p.state,p.invalidated,p.created_at,p.opened_at,p.closed_at,p.closes_at,
-                p.revision,p.eligible_count,eligibility_expired(p.state,p.closes_at,p.closed_at) AS eligibility_purged,
+                p.revision,p.eligible_count,p.policy_version,eligibility_expired(p.state,p.closes_at,p.closed_at) AS eligibility_purged,
                 to_char(p.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_cursor,
                 CASE WHEN p.state='open' AND deadline_clock.instant >= p.closes_at THEN 'closed' ELSE p.state END AS effective_state,
                 CASE WHEN p.state='open' AND deadline_clock.instant >= p.closes_at THEN p.closes_at ELSE p.closed_at END AS effective_closed_at
@@ -210,7 +210,7 @@ export function createApp(config: Config) {
         createdAt:p.created_at.toISOString(),openedAt:p.opened_at?.toISOString()??null,
         closedAt:p.effective_closed_at?.toISOString()??null,closesAt:p.closes_at.toISOString(),
         revision:p.revision,eligibleCount:p.eligible_count,eligibilityRetention:p.eligibility_purged?"purged":"retained",
-        policy:{version:1,minEligible:10,minResponses:5,minAnswersPerQuestion:5},
+        policy:pollPolicy(p.policy_version),
       })),nextCursor:rows.length>limit?
         makeCursor(owner,page.at(-1).created_cursor,page.at(-1).id,config.cursorKey):null};
     });
@@ -238,7 +238,7 @@ export function createApp(config: Config) {
       id:p.id,title:p.title,description:p.description,status:p.state,invalidated:p.invalidated,
       openedAt:p.opened_at.toISOString(),closedAt:p.closed_at?.toISOString()??null,
       closesAt:p.closes_at.toISOString(),questions:p.questions,
-      policy:{version:p.policy_version,minEligible:10,minResponses:5,minAnswersPerQuestion:5},
+      policy:pollPolicy(p.policy_version),
       key:{keyId:p.key_id,keyVersion:p.key_version,suite:p.suite,modulusBits:3072,publicJwk:p.public_jwk},
     };
   }));

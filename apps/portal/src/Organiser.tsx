@@ -6,13 +6,13 @@ import styles from "./Portal.module.css";
 
 export type Session = { user: { id: string; email: string; isOrganiser: boolean }; csrfToken: string };
 type Summary = { id: string; title: string; status: "draft" | "open" | "closed"; invalidated: boolean; revision: number; closesAt: string;
-  closedAt: string | null; eligibilityRetention: "retained" | "purged" };
+  closedAt: string | null; eligibilityRetention: "retained" | "purged"; policy: { version: number; minResponses: number; minAnswersPerQuestion: number } };
 type Poll = Summary & { description: string; questions: Question[]; eligibilityEmails: string[] | null };
 
 export const ORGANISER_WARNINGS = [
   "Questions are publicly readable by anyone with the invitation link; eligibility does not make them confidential.",
   "Free text can identify its authors.",
-  "Fewer than five responses means results are permanently withheld.",
+  "New polls show results after at least one response; a single eligible person or answer may be identifiable to the organiser.",
   "Opening freezes the title, description, questions, eligibility, deadline, signing key and publication policy. Nothing can change afterwards.",
 ];
 const blankQuestion = (): Question => ({ id: crypto.randomUUID(), type: "rating", prompt: "", required: true });
@@ -142,7 +142,7 @@ export function OrganiserApp({ session, onSignedOut }: { session: Session; onSig
   const viewResults = (poll: Summary) => void perform(async () => {
     const owned = await (await fetch(`/api/v1/polls/${poll.id}`, { credentials: "same-origin", cache: "no-store" })).json() as Poll;
     const response = await fetch(`/api/v1/polls/${poll.id}/results`, { credentials: "same-origin", cache: "no-store" });
-    const base = { title: owned.title, questions: owned.questions, closedAt: owned.closedAt };
+    const base = { title: owned.title, questions: owned.questions, closedAt: owned.closedAt, policy: owned.policy };
     setActive(null);
     if (response.ok) { setResults({ ...base, kind: "loaded", results: await response.json() as Results }); return; }
     const code = (await response.json().catch(() => ({})) as { error?: { code?: string } }).error?.code;
@@ -199,7 +199,7 @@ export function OrganiserApp({ session, onSignedOut }: { session: Session; onSig
           </div>
           <label className={styles.field}>Eligibility emails<textarea className={`${styles.textarea} mono`} rows={8} value={eligibility}
             onChange={(event) => setEligibility(event.target.value)} required /></label>
-          <p className={styles.meta}>Paste 10–1,000 institutional addresses, one per line, or a single-column CSV with an optional “email” header.
+          <p className={styles.meta}>Paste at least one institutional address, one per line, or a single-column CSV with an optional “email” header.
             {lineCount > 0 ? ` ${lineCount} line${lineCount === 1 ? "" : "s"} entered.` : ""} The exact list is visible only to you and is purged seven days after closure.</p>
           <h3 className={styles.sectionTitle}>Questions</h3>
           {questions.map((question, index) => <fieldset key={question.id} className={styles.questionEditor}>
@@ -253,8 +253,8 @@ export function OrganiserApp({ session, onSignedOut }: { session: Session; onSig
     </ConfirmDialog>}
     {confirm?.action === "close" && <ConfirmDialog title={`Close “${confirm.poll.title}” now?`} confirmLabel="Close poll now" variant="danger" typed="CLOSE"
       onCancel={() => setConfirm(null)} onConfirm={() => transition(confirm.poll, "close")}>
-      <p>Closing is irreversible: no further claims or responses are accepted, and if fewer than five responses arrived, results are permanently withheld.
-        Live response or claim counts are never shown.</p>
+      <p>Closing is irreversible: no further claims or responses are accepted. Results are withheld if fewer than {confirm.poll.policy.minResponses} {confirm.poll.policy.minResponses === 1 ? "response was" : "responses were"} received.
+        Live response or claim counts are never shown. For small polls, answers may identify participants.</p>
     </ConfirmDialog>}
     {confirm?.action === "delete" && <ConfirmDialog title={`Delete the draft “${confirm.poll.title}”?`} confirmLabel="Delete draft" variant="danger" typed="DELETE"
       onCancel={() => setConfirm(null)} onConfirm={() => transition(confirm.poll, "delete")}>

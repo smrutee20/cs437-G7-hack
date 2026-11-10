@@ -24,11 +24,11 @@ The product supports low-stakes course feedback, mess feedback, and club/council
 | Authentication | Server-side Google OIDC authorization-code flow; institutional Google Workspace accounts only; no Google frontend SDK. |
 | Institutional domain | Production email domain and expected Workspace `hd` are both `iitgn.ac.in`. Verify these against real institutional tokens before release. A different actual domain requires a reviewed configuration/specification change, not a suffix wildcard or verification bypass. |
 | Organisers | Operator-provisioned organiser accounts; no public organiser registration, delegated roles, or organiser invitation feature. |
-| Eligibility | Organiser-supplied exact-email list; 10–1,000 distinct normalized entries; no roster discovery. |
+| Eligibility | Organiser-supplied exact-email list; at least one distinct normalized entry, no policy maximum (request-size bounds still apply); no roster discovery. |
 | Poll lifecycle | Manual opening, automatic deadline closure, optional earlier manual closure; closed is terminal. No scheduled opening, reopening, deadline extension, or post-opening content changes. |
 | Questions | 1–20 questions; at least one required structured question. Single-choice and integer 1–5 ratings; at most three optional free-text questions. |
 | Free text | Disabled by default for a new poll; an organiser may explicitly enable it before opening. Free-text questions are always optional. |
-| Publication | At least five accepted responses per poll and five nonempty answers per published question. Exact structured category counts are permitted after the question threshold; small-cell inference remains an explicit limitation. |
+| Publication | New polls (policy v2) require at least one accepted response per poll and one nonempty answer per published question. Previously opened policy-v1 polls retain their frozen five/five thresholds; editable drafts adopt v2. Exact structured counts are permitted; a single answer or eligible person can be identifiable. |
 | Credential recovery | No replacement credential and no new signing operation for a consumed claim, even after network or browser failure. |
 | Submission retry | Same credential plus the same canonical answers returns success; different answers return a spent-credential conflict. No answer editing. |
 | Browser support | Current stable desktop Chromium and Firefox, with HTTPS, Web Crypto, IndexedDB, and Web Locks. Unsupported/blocked storage or APIs prevent claiming. Mobile/Safari support is not claimed until separately tested. |
@@ -45,7 +45,7 @@ Out of scope: mandatory participation; guaranteed anonymity against operators, n
 
 1. Sign in to the portal using an authorised organiser account.
 2. Create and edit a draft, import/paste eligibility, configure questions and deadline, and preview using synthetic answers only. Preview cannot issue a credential or create a response.
-3. Review warnings: questions will be publicly readable by anyone with the invitation link; eligibility does not make questions confidential; free text can identify authors; fewer than five responses means results are permanently withheld; content, eligibility, deadline, key, and publication policy cannot change after opening.
+3. Review warnings: questions will be publicly readable by anyone with the invitation link; eligibility does not make questions confidential; free text and a single eligible person or answer can identify authors; new polls with zero responses have results permanently withheld (existing polls keep their frozen policy); content, eligibility, deadline, key, and publication policy cannot change after opening.
 4. Open the poll and share `https://<response-host>/p/<pollId>`. The random poll ID is a public locator, not an authentication credential.
 5. Close early if desired. The confirmation explains that closure is irreversible and may leave results withheld; it does not reveal live response/claim counts.
 6. After closure, view threshold-compliant results or a clear “closed; insufficient responses; results permanently withheld” state. No force-publish override exists.
@@ -63,7 +63,7 @@ A forwarded invitation does not grant eligibility. A forwarded bearer credential
 
 ### Mandatory participant wording
 
-> Your institutional account is checked to issue one credential. The response service does not require sign-in, and answers are not stored with your account identity. A credential can be used once and can be lost or shared. Do not include identifying details in your answers. Free text, small result categories, outside knowledge, and network metadata may reveal you. The platform and its infrastructure must be trusted. This is not an election system or a guarantee of absolute anonymity.
+> Your institutional account is checked to issue one credential. The response service does not require sign-in, and answers are not stored with your account identity. A credential can be used once and can be lost or shared. Do not include identifying details in your answers. A single eligible participant or answer may identify you to the organiser. Free text, small result categories, outside knowledge, and network metadata may reveal you. The platform and its infrastructure must be trusted. This is not an election system or a guarantee of absolute anonymity.
 
 Show the loss warning before claiming and the content-identification warning next to every free-text field and before submission. Never claim that the organiser cannot make inferences from answer content.
 
@@ -237,7 +237,7 @@ Limits after text normalization:
 | Choice options | 2–10; each label 1–120 code points/480 bytes; normalized labels must be distinct within the question. |
 | Rating | An actual JSON integer in `[1,5]`; no zero, decimals, string coercion, or implicit abstention value. |
 | Free text | 0–2,000 code points/8,000 bytes; always optional; at most three such questions. |
-| Whole poll | 1–20 questions, at least one required structured question, and 10–1,000 eligible entries. |
+| Whole poll | 1–20 questions, at least one required structured question, and at least one eligible entry (subject to the request-size bound). |
 
 For all human text: reject invalid Unicode/unpaired surrogates; convert CRLF/CR to LF, normalize to NFC, trim using ECMAScript `String.prototype.trim` whitespace rules, and reject Unicode category `Cc` control characters except LF/TAB. Apply byte and code-point bounds after normalization, with the HTTP size bound also enforced before parsing. Render as escaped plain text; preserve internal whitespace. No HTML, Markdown interpretation, embeds, or automatic links.
 
@@ -329,8 +329,8 @@ Only the poll owner can access results. Before final closure return `409 results
 After serialized final closure:
 
 - If invalidated: `410 poll_withdrawn`, with no results.
-- If accepted response count is below five: `200 {"state":"withheld","reason":"insufficient_responses"}`. Do not disclose the exact below-threshold count. Withholding is permanent; there is no reopen or override.
-- Otherwise return a `ready` result containing `totalResponses` and one item per question in schema order. Each question is independently published only if at least five accepted responses contain a nonempty answer to it.
+- If accepted response count is below the poll's frozen `min_responses` (one for v2; five for existing v1): `200 {"state":"withheld","reason":"insufficient_responses"}`. Do not disclose a below-threshold count. Withholding is permanent; there is no reopen or override.
+- Otherwise return a `ready` result containing `totalResponses` and one item per question in schema order. Each question is independently published only if at least the frozen `min_answers_per_question` responses contain a nonempty answer (one for v2; five for v1).
 - A suppressed question returns only `{questionId, state:"withheld", reason:"insufficient_answers"}`. Do not send its precise answered/skipped counts, categories, mean, or texts. Required-question counts may be logically inferable from total responses; do not claim otherwise.
 
 ### Exact output and aggregation
@@ -341,7 +341,7 @@ Ready result shape is `{state:"ready", totalResponses, questions:[...]}`. A publ
 - `rating`: `distribution:[{value,count,percentage}]` for all integers 1–5 and `mean`, rounded half-up to two decimals. Mean/percentages exclude skipped answers.
 - `free_text`: `texts:[string,...]`, one normalized nonempty text per answer, with duplicates preserved. No text edits, individual removals, sentiment enrichment, author fields, response IDs, or timestamps in MVP.
 
-After the five-answer question threshold, exact category counts, including one-to-four counts, are deliberately allowed for useful low-stakes aggregates. No further cell suppression is claimed. A singleton category, unanimous answer, free-text content, repeated polls, or outside knowledge may permit inference. State this in organiser/participant guidance; do not describe the threshold as k-anonymity or differential privacy.
+After the poll's frozen question threshold, exact category counts, including singletons, are deliberately allowed for useful low-stakes aggregates. No further cell suppression is claimed. A singleton category, unanimous answer, free-text content, repeated polls, or outside knowledge may permit inference. State this in organiser/participant guidance; do not describe the threshold as k-anonymity or differential privacy.
 
 Generate an immutable result snapshot only after closure and eligibility for poll-level publication. Shuffle each published free-text question independently with cryptographically sourced randomness and persist only that shuffled text list in the snapshot. Do not reuse a cross-question permutation or derive presentation order from insertion order, nullifiers, or a shared response identifier. Independent random permutations can coincide by chance; tests must verify independent generation rather than demand that coincidence is impossible. Return the same snapshot on subsequent reads. Schema order applies to questions/options, not respondent text order.
 
@@ -381,7 +381,7 @@ All application endpoints below are under `/api/v1` on the indicated host. JSON 
 ### Shared DTOs
 
 - `DraftInput = {title,description,closesAt,questions,eligibilityEmails}` using the validated types/limits above. All fields are required; description may be empty. The browser parses pasted/CSV eligibility to the email array and the server independently validates it. There is no server file-upload endpoint.
-- `OwnerPoll = {id,title,description,status,invalidated,createdAt,openedAt,closedAt,closesAt,revision,questions,eligibleCount,eligibilityEmails,eligibilityRetention,policy}`. Revision starts at `1`, increments on each successful draft update, and remains frozen on opening. After eligibility erasure, `eligibilityEmails:null` and `eligibilityRetention:"purged"`; otherwise `"retained"`. Contains no claims, response counts, response rows, or private-key references. `policy` is `{version:1,minEligible:10,minResponses:5,minAnswersPerQuestion:5}`.
+- `OwnerPoll = {id,title,description,status,invalidated,createdAt,openedAt,closedAt,closesAt,revision,questions,eligibleCount,eligibilityEmails,eligibilityRetention,policy}`. Revision starts at `1`, increments on each successful draft update, and remains frozen on opening. After eligibility erasure, `eligibilityEmails:null` and `eligibilityRetention:"purged"`; otherwise `"retained"`. Contains no claims, response counts, response rows, or private-key references. `policy` is `{version:2,minEligible:1,minResponses:1,minAnswersPerQuestion:1}` for new polls and retains `{version:1,minEligible:10,minResponses:5,minAnswersPerQuestion:5}` for previously opened polls.
 - `PublicPoll = {id,title,description,status,invalidated,openedAt,closedAt,closesAt,questions,policy,key}`. `key = {keyId,keyVersion:1,suite:"RSABSSA-SHA384-PSS-Randomized",modulusBits:3072,publicJwk}`. No owner identity, eligibility entries/count, claims, response counts, or result values. Drafts are not public; normal closed polls remain publicly readable until purge.
 - Timestamps not yet applicable are `null`. `status`/`closedAt` reflect effective deadline closure. The implementation uses explicit DTO constructors, never serialization of database rows.
 
@@ -507,9 +507,9 @@ A deletion from live storage may remain in encrypted backups for up to seven add
 
 Required production configuration includes exact portal/response HTTPS origins, fixed Google OAuth client ID/secret/callback, email domain and hosted domain above, database role credentials, private-key secret-store path, private signer endpoint/service credential, and retention/limiter settings. No credential or signing secret belongs in Vite public environment variables.
 
-Production startup fails closed for: identical portal/response hostname, HTTP origins, wildcard origins/callbacks, missing institutional `hd` validation, demo authentication, missing signer/native-RSA capability, unavailable durable storage, missing DB isolation, or relaxed publication minimums. The deployment checklist must separately attest proxy/hosting logging configuration; this cannot be proven merely by an application flag.
+Production startup fails closed for: identical portal/response hostname, HTTP origins, wildcard origins/callbacks, missing institutional `hd` validation, demo authentication, missing signer/native-RSA capability, unavailable durable storage, missing DB isolation, or publication settings outside the two supported frozen policy versions. The deployment checklist must separately attest proxy/hosting logging configuration; this cannot be proven merely by an application flag.
 
-Use a dedicated local/demo executable with synthetic accounts and isolated database/keys, bound to loopback only. The production artifact excludes the mock identity provider and seeded-login routes; production configuration rejects any demo-auth switch. Demo accounts use stable synthetic subjects and are not real Google tokens. Keep the same ten-eligible/five-response/five-answer policies in demos; there is no production or local threshold shortcut.
+Use a dedicated local/demo executable with synthetic accounts and isolated database/keys, bound to loopback only. The production artifact excludes the mock identity provider and seeded-login routes; production configuration rejects any demo-auth switch. Demo accounts use stable synthetic subjects and are not real Google tokens. Keep the same versioned policies in demos and production; there is no demo-only threshold shortcut.
 
 The initial production institutional/OAuth assumptions must be confirmed with real IITGN accounts and the institution's Google configuration. If IITGN cannot authorize the configured app or the signed domain claims differ, do not weaken verification. Ship only the clearly labelled local synthetic demo until the deployment facts are resolved and the configuration/spec is reviewed. Two approved HTTPS hostnames and logging-compliant infrastructure are similarly mandatory release prerequisites.
 
@@ -551,7 +551,7 @@ Use unit tests for encodings/validation, integration tests against real PostgreS
 
 ### Publication, operations, and demo
 
-21. Test poll thresholds at 0/4/5 responses and per-question thresholds at 0/4/5 nonempty answers. Blank optional text does not count; no all-empty submission is valid. Below-threshold DTOs omit exact counts/values. No owner route/preload leaks open counts or results.
+21. Test new polls at zero/one responses and zero/one nonempty answers; verify that existing v1 polls retain their frozen five/five thresholds. Blank optional text does not count; no all-empty submission is valid. Below-threshold DTOs omit exact counts/values. No owner route/preload leaks open counts or results.
 22. Verify count/percentage/mean denominators, rounding, zeros, skipped answers, duplicate texts, independent stable per-question shuffling, and absence of response-level grouping in actual JSON. Free text is off by default and never required.
 23. Verify immutable privacy policy, no export/filter bypass, permanent withheld state, emergency withdrawal, and that cached snapshots are inaccessible after withdrawal/purge.
 24. Test request limits, bounded concurrency/timeouts, and overload before claim consumption. Public rate-limit storage has no participant/IP/device keys and expires as specified.

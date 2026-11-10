@@ -1,5 +1,5 @@
 import Fastify, { type FastifyReply, type FastifyRequest, type FastifyServerFactory } from "fastify";
-import { isCanonicalUuidV4, parseStrictJson } from "@iitgn-feedback/protocol";
+import { isCanonicalUuidV4, parseStrictJson, pollPolicy } from "@iitgn-feedback/protocol";
 import type { Client } from "pg";
 import { createKeyedBuckets, createSemaphore, createTokenBucket, Overloaded, type Admission } from "./admission.js";
 import { RedeemError, redeemResponse } from "./redeem.js";
@@ -79,7 +79,7 @@ export function createApp(config: Config) {
         id: p.id, title: p.title, description: p.description, status: p.state, invalidated: p.invalidated,
         openedAt: p.opened_at.toISOString(), closedAt: p.closed_at?.toISOString() ?? null,
         closesAt: p.closes_at.toISOString(), questions: p.questions,
-        policy: { version: p.policy_version, minEligible: 10, minResponses: 5, minAnswersPerQuestion: 5 },
+        policy: pollPolicy(p.policy_version),
         key: { keyId: p.key_id, keyVersion: p.key_version, suite: p.suite, modulusBits: 3072, publicJwk: p.public_jwk },
       };
     } finally { await release(); }

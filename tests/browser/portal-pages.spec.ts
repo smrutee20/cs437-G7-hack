@@ -15,7 +15,7 @@ test("the public About page opens from the response site without replacing the r
   await expect(about.getByRole("heading", { name: "Why Freed Back?" })).toBeVisible();
   await expect(about.getByText(/deployed on AWS as a proof of concept/i)).toBeVisible();
   await expect(about.getByText(/not to collect real feedback yet/i)).toBeVisible();
-  await expect(about.getByText(/five responses/i).first()).toBeVisible();
+  await expect(about.getByText(/at least one response/i).first()).toBeVisible();
   await expect(about.getByRole("link", { name: /IITGN Freed Back/ })).toHaveAttribute("href", "/");
 });
 

@@ -65,11 +65,11 @@ Synthetic accounts: `organiser` and `organiser1`–`organiser6`, `student1`–`s
 
 A walkthrough:
 
-1. On the portal, choose **Sign in as organiser** and create a poll with 10+ of the synthetic addresses.
+1. On the portal, choose **Sign in as organiser** and create a poll with at least one of the synthetic addresses.
 2. **Open poll**, which asks you to confirm the freeze, and copy the public link.
 3. In another browser profile, sign in on the portal as a participant through the synthetic button (or `fetch("/__demo/login", …)` with another student), then open the public link.
 4. Choose **Prepare my credential**, then **Open claim window**, then **Stamp my envelope** in the portal window. Answer and choose **Submit answers**.
-5. As the organiser, **Close poll** (type `CLOSE`), then **View results**. Fewer than five responses stay permanently withheld.
+5. As the organiser, **Close poll** (type `CLOSE`), then **View results**. New polls publish after one response; zero responses are permanently withheld. Small polls may identify participants. Older polls retain their frozen five-response threshold.
 
 For UI development, the Vite mode is still available (three terminals):
 

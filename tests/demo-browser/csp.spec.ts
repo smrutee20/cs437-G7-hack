@@ -68,7 +68,7 @@ test("the production bundles run the whole flow with zero CSP violations, and th
   await organiser.getByRole("dialog").getByRole("button", { name: "Close poll now" }).click();
   await expect(organiser.getByRole("status")).toHaveText("Poll is closed.");
   await organiser.getByRole("listitem").filter({ hasText: title }).getByRole("button", { name: "View results" }).click();
-  await expect(organiser.getByRole("region", { name: "Results" })).toContainText("Results are permanently withheld");
+  await expect(organiser.getByRole("region", { name: "Results" })).toContainText("1 response");
 
   expect(organiserWatch.violations).toEqual([]);
   expect(participantWatch.violations).toEqual([]);

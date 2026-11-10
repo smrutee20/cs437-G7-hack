@@ -36,12 +36,12 @@ describe("draft eligibility input (SPEC.md §§2,5)", () => {
     expect(() => validateEligibilityEmails([...ten, bad])).toThrow(/invalid eligibility/);
   });
 
-  test("requires 10–1,000 unique addresses, not merely 10 rows", () => {
-    for (const input of [ten.slice(0, 9), Array(10).fill(ten[0]),
-      Array.from({ length: 1001 }, (_, i) => `student${i}@iitgn.ac.in`)]) {
-      expect(() => validateEligibilityEmails(input)).toThrow(/10 to 1000 unique/);
-    }
-    expect(validateEligibilityEmails(Array.from({ length: 1000 }, (_, i) => `student${i}@iitgn.ac.in`)).emails).toHaveLength(1000);
+  test("requires at least one distinct address, with no list-size maximum", () => {
+    expect(() => validateEligibilityEmails([])).toThrow(/at least one unique/);
+    expect(validateEligibilityEmails(Array(10).fill(ten[0])).emails).toEqual([ten[0]]);
+    expect(validateEligibilityEmails([ten[0]]).emails).toEqual([ten[0]]);
+    const large = Array.from({ length: 10_001 }, (_, i) => `student${i}@iitgn.ac.in`);
+    expect(validateEligibilityEmails(large).emails).toHaveLength(10_001);
   });
 
   test("rejects wrong framing and does not coerce inputs", () => {

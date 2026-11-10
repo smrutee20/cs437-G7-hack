@@ -35,8 +35,8 @@ export function validateEligibilityEmails(input: unknown): { inputCount: number;
     }
   }
   if (invalidRows.length) throw new EligibilityError("invalid eligibility rows", invalidRows);
-  if (emails.size < 10 || emails.size > 1000) {
-    throw new EligibilityError("eligibility requires 10 to 1000 unique addresses");
+  if (emails.size === 0) {
+    throw new EligibilityError("eligibility requires at least one unique address");
   }
   return { inputCount: input.length, emails: [...emails] };
 }

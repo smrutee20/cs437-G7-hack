@@ -45,13 +45,13 @@ All on one machine (Node 24.19.0, PostgreSQL 17 in Compose, Chromium 158.0.8127.
 | 18 | Hostile content; CSP; opener in real builds | `results.spec.ts`, `poll-content.spec.ts`, `csp.spec.ts` (production bundles, zero violations, enforcement proven) | Local |
 | 19 | Persistence and log review | `logging.test.ts`, `foundation.test.ts`, `results.test.ts`, signer log check | Local; ingress/CDN/WAF **blocked** |
 | 20 | Runtime role privileges | `privileges.test.ts` (exact sets; found and fixed real over-grants) | Local |
-| 21 | Thresholds at 0/4/5 | `results.test.ts`, `results.spec.ts` | Local |
+| 21 | Original v1 thresholds at 0/4/5 | Historical local evidence; new v2 single-response tests in `results.test.ts` | Local |
 | 22 | Aggregation, rounding, shuffles, JSON shape | `results.test.ts`, `results-api.test.ts` | Local |
 | 23 | Immutable policy, no export, permanent withholding, withdrawal, purge | `results.test.ts`, `results-api.test.ts`, `operations.test.ts` | Local |
 | 24 | Limits, overload, limiter privacy | `respond-admission.test.ts`, `claim-admission.test.ts`, `respond-api.test.ts`, `draft-limits.test.ts`, `http-bounds.test.ts`, `production-server.test.ts` (414/431) | Local; no load test |
 | 25 | Retention boundaries | `operations.test.ts`, `submit.spec.ts` (browser expiry) | Local; backup expiry is procedure only |
 | 26 | Stale backup restore, key loss/compromise | `operations.test.ts` (real database template copy) | Local; production backup tooling **blocked** |
-| 27 | Synthetic walkthrough (ten eligible, five responses, withheld four) | `results.spec.ts` on the production bundles under CSP, both browsers | **Done** (synthetic) |
+| 27 | Synthetic walkthrough (ten eligible, five responses, withheld four under v1) | Historical result; v2 now publishes even with one response; `results.spec.ts` exercises small polls under CSP | **Done** (synthetic) |
 
 ## Known gaps (not hidden by any test)
 

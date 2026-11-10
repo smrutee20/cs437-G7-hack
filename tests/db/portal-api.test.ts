@@ -85,7 +85,7 @@ test("owner creates a draft via guarded API; other owners see 404 and no private
   const dto=created.json();
   firstPollId=dto.id;
   expect((await send("outsider","GET",`/polls/${dto.id}/claim-context`,undefined,"outsider-csrf")).statusCode).toBe(404);
-  expect(dto).toMatchObject({status:"draft",revision:1,eligibleCount:10,policy:{version:1,minEligible:10,minResponses:5,minAnswersPerQuestion:5}});
+  expect(dto).toMatchObject({status:"draft",revision:1,eligibleCount:10,policy:{version:2,minEligible:1,minResponses:1,minAnswersPerQuestion:1}});
   expect(Object.keys(dto).sort()).toEqual(["closedAt","closesAt","createdAt","description","eligibleCount","eligibilityEmails","eligibilityRetention","id","invalidated","openedAt","policy","questions","revision","status","title"].sort());
   expect(JSON.stringify(dto)).not.toMatch(/privateSecretRef|claim|responseCount|fingerprint|subject/i);
   const wrongTypeOpen=await app.inject({method:"POST",url:`/api/v1/polls/${dto.id}/open`,

@@ -13,14 +13,15 @@ type PublishedQuestion = { questionId: string; state: "published"; answeredCount
   { type: "free_text"; texts: string[] });
 type ResultItem = PublishedQuestion | { questionId: string; state: "withheld"; reason: "insufficient_answers" };
 export type Results = { state: "withheld"; reason: "insufficient_responses" } | { state: "ready"; totalResponses: number; questions: ResultItem[] };
-export type ResultsView = { title: string; questions: Question[]; closedAt: string | null } &
+export type ResultsView = { title: string; questions: Question[]; closedAt: string | null;
+  policy: { version: number; minResponses: number; minAnswersPerQuestion: number } } &
   ({ kind: "loaded"; results: Results } | { kind: "message"; text: string; withdrawn?: boolean });
 
 const TYPE = { single_choice: "Single choice", rating: "Rating", free_text: "Free text" } as const;
 const pct = (value: number) => `${value.toFixed(1)}%`;
-export const RESULT_GUIDANCE = "Results appear only after closure and at least five responses, and each question needs five answers. " +
-  "This is a publication threshold, not anonymity: small counts, unanimous answers, free text, repeated polls and outside knowledge " +
-  "can still point to individuals. Share with care. Free-text answers are shown exactly as written, in an independent random order.";
+export const RESULT_GUIDANCE = "These results are not anonymous to someone who can infer the respondent from a small eligible group. " +
+  "A single answer, unanimous answers, free text, repeated polls and outside knowledge can identify individuals. " +
+  "Share with care. Free-text answers are shown exactly as written, in an independent random order.";
 
 function useReveal(): boolean {
   const [lit, setLit] = useState(false);
@@ -48,18 +49,18 @@ export function ResultsPanel({ view, onBack }: { view: ResultsView; onBack: () =
     </div> : view.results.state === "withheld" ? <div className={styles.heldBig}>
       <DotDisplay text="WITHHELD" label="Withheld" dot={5} dotGap={2} glyphGap={6} windowed off="face" />
       <h3 className={styles.heldTitle}>Results permanently withheld</h3>
-      <p className={styles.heldText}>Results are permanently withheld: fewer than five responses were received.</p>
+      <p className={styles.heldText}>Results are permanently withheld: fewer than {view.policy.minResponses} {view.policy.minResponses === 1 ? "response was" : "responses were"} received.</p>
       <p className={styles.heldSub}>There is no override, and the exact number of responses isn’t shown either.</p>
     </div> : <>
       <div className={styles.summary}>
         <div className={styles.totalBox}>
-          <DotDisplay text={String(view.results.totalResponses)} label={`${view.results.totalResponses} responses`} tone={lit ? "lit" : "dim"}
+          <DotDisplay text={String(view.results.totalResponses)} label={`${view.results.totalResponses} ${view.results.totalResponses === 1 ? "response" : "responses"}`} tone={lit ? "lit" : "dim"}
             dot={6} dotGap={2} glyphGap={8} scramble scramblePool="0123456789" off="face" />
           <span className={styles.totalLabel} aria-hidden="true">RESPONSES</span>
-          <span className="sr-only">{view.results.totalResponses} responses</span>
+          <span className="sr-only">{view.results.totalResponses} {view.results.totalResponses === 1 ? "response" : "responses"}</span>
         </div>
         <div className={styles.summaryText}>
-          <p>Results were sealed when the poll closed. A question is shown only if at least five people answered it.</p>
+          <p>Results were sealed when the poll closed. A question is shown only if at least {view.policy.minAnswersPerQuestion} {view.policy.minAnswersPerQuestion === 1 ? "person answered" : "people answered"} it.</p>
           <p className={styles.guidance}>{RESULT_GUIDANCE}</p>
         </div>
       </div>
@@ -73,7 +74,7 @@ export function ResultsPanel({ view, onBack }: { view: ResultsView; onBack: () =
         </div>;
         if (item.state === "withheld") {
           return <section key={item.questionId} className={`${styles.resultCard} ${styles.withheldCard}`}>{head}
-            <WithheldPlate>Withheld: fewer than five answers. No counts are shown for this question.</WithheldPlate></section>;
+            <WithheldPlate>Withheld: fewer than {view.policy.minAnswersPerQuestion} {view.policy.minAnswersPerQuestion === 1 ? "answer" : "answers"}. No counts are shown for this question.</WithheldPlate></section>;
         }
         return <section key={item.questionId} className={styles.resultCard}>{head}
           {item.type === "single_choice" && <><ul className={styles.optionRows}>

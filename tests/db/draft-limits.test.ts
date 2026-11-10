@@ -37,7 +37,7 @@ beforeAll(async () => {
 afterAll(async () => { await app?.close(); await observer.end(); await rollbackFoundation(url); if (keys) await rm(keys, { recursive: true, force: true }); });
 
 test("ten key-generating creations per organiser per day; invalid drafts do not count", async () => {
-  const invalid = { ...draft(), eligibilityEmails: ["only@iitgn.ac.in"] };
+  const invalid = { ...draft(), eligibilityEmails: [] };
   for (let i = 0; i < 3; i++) expect((await create("busy", invalid)).statusCode).toBe(422);
   for (let i = 0; i < 10; i++) expect((await create("busy", draft(`Busy ${i}`))).statusCode).toBe(201);
   const limited = await create("busy", draft("Eleventh"));

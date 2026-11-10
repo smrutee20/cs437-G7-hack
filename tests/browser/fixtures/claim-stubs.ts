@@ -26,7 +26,7 @@ export function syntheticPoll(overrides: { pollId?: string; key?: ReturnType<typ
     openedAt: new Date(Date.now() - 60_000).toISOString(), closedAt: null,
     closesAt: new Date(Date.now() + 86_400_000).toISOString(),
     questions: overrides.questions ?? [{ id: randomUUID(), type: "rating", prompt: "How was it?", required: true }],
-    policy: { version: 1, minEligible: 10, minResponses: 5, minAnswersPerQuestion: 5 },
+    policy: { version: 2, minEligible: 1, minResponses: 1, minAnswersPerQuestion: 1 },
     key: { keyId, keyVersion: 1, suite: "RSABSSA-SHA384-PSS-Randomized", modulusBits: 3072, publicJwk },
   } };
 }

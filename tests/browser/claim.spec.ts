@@ -122,6 +122,24 @@ test("signed out, the bridge offers a separate portal sign-in without consuming 
   await popup.close();
 });
 
+test("a refused account is shown which address it signed in with; the claim window stays open and the claim is retryable", async ({ page, context }) => {
+  const poll = syntheticPoll();
+  const { calls } = await stubApis(context, poll, {
+    claim: () => ({ status: 403, body: { error: { code: "not_eligible", message: "not eligible" } } }),
+  });
+  await prepared(page, poll);
+  const popup = await openBridge(page);
+  await popup.getByRole("button", { name: "Stamp my envelope" }).click();
+  await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "prepared");
+  await expect(page.getByTestId("claim-message")).toContainText("The claim window shows which address you signed in with");
+  // "You can close this window" appears only after stored_ack, the point at which the window used to close itself.
+  await expect(popup.getByTestId("bridge")).toContainText("You can close this window");
+  await expect(popup.getByTestId("bridge")).toContainText(`You are signed in as ${PARTICIPANT}, which is not on this poll's eligibility list`);
+  expect(popup.isClosed()).toBe(false);
+  await expect(page.getByRole("button", { name: "Open claim window" })).toBeEnabled();
+  expect(calls).toHaveLength(1);
+});
+
 test("a consumed entitlement is terminal for this browser and erases the secret", async ({ page, context }) => {
   const poll = syntheticPoll();
   const { calls } = await stubApis(context, poll, {

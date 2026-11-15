@@ -29,8 +29,6 @@ export type CredentialRecord = PreparedRecord | ClaimSentRecord | UsableRecord |
 const MARKERS: ReadonlySet<CredentialState> = new Set(["claim_consumed", "claim_uncertain", "accepted", "spent", "credential_invalid"]);
 export type CredentialState = CredentialRecord["state"];
 
-/** The bridge may resend its one result for two minutes; after that the attempt is stranded. */
-export const CLAIM_RESULT_WINDOW_MS = 2 * 60 * 1000;
 const MARKER_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 /** A pending submission may be confirmed until 24 hours after effective closure (at most closesAt). */
 const PENDING_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -170,11 +168,12 @@ export const marker = (record: CredentialRecord, state: MarkerRecord["state"]): 
   ({ pollId: record.pollId, state, closesAt: record.closesAt });
 
 /**
- * Erases what must not outlive its purpose: unused credentials once the poll is
- * observed closed or withdrawn, a stranded claim after the result window, a
- * pending submission 24 hours after the deadline (even if its outcome is still
- * unknown), and non-secret markers seven days after closure. Run on start, load
- * and while a tab is open.
+ * Erases what must not outlive its purpose: unused credentials and unanswered
+ * claims once the poll is observed closed or withdrawn, a pending submission 24
+ * hours after the deadline (even if its outcome is still unknown), and non-secret
+ * markers seven days after closure. A claim_sent record is kept while the poll is
+ * open so the same blinded request can be retried. Run on start, load and while a
+ * tab is open.
  */
 export function sweep(pollId: string, observed: { open: boolean } | null, now = Date.now()): Promise<CredentialRecord | null> {
   return withPollLock(pollId, async () => {
@@ -188,8 +187,6 @@ export function sweep(pollId: string, observed: { open: boolean } | null, now = 
       if (now >= Date.parse(current.closesAt) + PENDING_LIFETIME_MS) next = null;
     } else if (observed && !observed.open) {
       next = null;
-    } else if (current.state === "claim_sent" && now - current.sentAt >= CLAIM_RESULT_WINDOW_MS) {
-      next = marker(current, "claim_uncertain");
     }
     if (next !== current) await writeVerified(pollId, next);
     return next;

@@ -28,9 +28,13 @@ export function prepareCredential(poll: ClaimPoll, draft: Draft = {}): Promise<C
   });
 }
 
-/** After bridge_ack: durably records claim_sent, then returns the blinded request to send. */
+/**
+ * After bridge_ack: durably records claim_sent, then returns the blinded request to send.
+ * An explicit retry from claim_sent resends the stored blinded message unchanged, so the
+ * portal can re-sign a claim whose reply was lost; a fresh request is never generated.
+ */
 export async function beginClaim(pollId: string): Promise<string> {
-  const sent = await transition(pollId, ["prepared"], (current): ClaimSentRecord =>
+  const sent = await transition(pollId, ["prepared", "claim_sent"], (current): ClaimSentRecord =>
     ({ ...(current as PreparedRecord), state: "claim_sent", sentAt: Date.now() }));
   return encodeBase64Url(sent.blinded);
 }

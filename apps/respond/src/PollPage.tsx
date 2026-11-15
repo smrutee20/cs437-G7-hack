@@ -206,7 +206,9 @@ function PollBooth({ poll, onClosed }: { poll: PublicPoll; onClosed: (invalidate
       }).catch(() => setMessage("A credential request could not be saved in this browser. Nothing was sent."))
         .finally(() => { setBusy(false); void refresh(); });
     }}>Prepare my credential</Button>;
-  } else if (open && state === "prepared") {
+  } else if (open && (state === "prepared" || state === "claim_sent")) {
+    // From claim_sent this is an explicit retry: beginClaim resends the stored blinded message unchanged.
+    const label = state === "claim_sent" ? "Retry claim" : "Open claim window";
     primary = <Button variant="primary" block disabled={windowBusy} onClick={() => {
       // Synchronous in this click: popup permission does not survive awaited work.
       cleanup.current();
@@ -228,7 +230,7 @@ function PollBooth({ poll, onClosed }: { poll: PublicPoll; onClosed: (invalidate
           await refresh();
         },
       });
-    }}>{windowBusy ? "Waiting for the portal…" : "Open claim window"}</Button>;
+    }}>{windowBusy ? "Waiting for the portal…" : label}</Button>;
   } else if (open && state === "usable") {
     primary = <Button variant="primary" block type="submit" form="answers" disabled={sending}>Submit answers</Button>;
   } else if (pending) {
@@ -288,7 +290,7 @@ function PollBooth({ poll, onClosed }: { poll: PublicPoll; onClosed: (invalidate
         {open && (state === "none" || state === "prepared") && <WarningPlate>{LOSS_WARNING}</WarningPlate>}
         {open && state === "usable" && <WarningPlate>{SUBMIT_WARNING}</WarningPlate>}
         {primary}
-        {open && state === "prepared" && <p className={styles.status}>Not signed in yet? <a href={`${__PORTAL_ORIGIN__}/signed-in`}
+        {open && (state === "prepared" || state === "claim_sent") && <p className={styles.status}>Not signed in yet? <a href={`${__PORTAL_ORIGIN__}/signed-in`}
           target="_blank" rel="noopener noreferrer">Sign in to portal</a> in another tab, then return here to open the claim window.</p>}
         <p className={styles.status} data-testid="claim-window" data-state={win.state} data-rejected={win.rejected}>
           {WINDOW_TEXT[win.state as ClaimWindowState] ?? ""}</p>

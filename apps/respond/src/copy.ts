@@ -42,8 +42,8 @@ export function outcomeText(outcome: ClaimOutcome): string {
       ? "A credential was claimed but could not be issued. This browser cannot respond."
       : "A credential for your account on this poll has already been claimed.";
     case "closed": return "This poll is closed or withdrawn, so nothing can be claimed.";
-    case "uncertain": return "The outcome of this claim is unknown. Do not start another claim; this page will mark the " +
-      "attempt as uncertain if no result arrives.";
+    case "uncertain": return "The outcome of this claim is unknown. Use “Retry claim” to send the same sealed envelope again; " +
+      "you still get at most one credential.";
   }
 }
 
@@ -70,7 +70,8 @@ export const BOOTH: Record<string, Omit<BoothView, "display"> & { display?: stri
   waiting: { display: "WAIT", lit: false, leds: "run", ledge: "empty", step: 2, headline: "Waiting for the portal window",
     body: "Confirm in the portal window. Keep this tab open until the stamped envelope comes back." },
   claim_sent: { display: "WAIT", lit: false, leds: "run", ledge: "empty", step: 2, headline: "Claim in progress",
-    body: "A claim from this browser is in progress or its outcome is unknown. No new claim will be started from this browser." },
+    body: "A claim from this browser is in progress or its reply was lost. “Retry claim” sends the same sealed envelope again, " +
+      "so the portal can only re-stamp this claim, never issue a second credential." },
   usable: { display: "READY", lit: true, leds: "lit", ledge: "card", step: 3, headline: "Credential ready",
     body: "Stamped and checked in this browser. Review your answers, then submit. You can submit only once." },
   sending: { display: "SEND", lit: false, leds: "run", ledge: "card", cardIn: true, step: 3, headline: "Sending",

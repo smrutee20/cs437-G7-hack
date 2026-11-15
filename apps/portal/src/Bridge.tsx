@@ -33,7 +33,7 @@ const REFUSED: Record<string, string> = {
   poll_closed: "This poll has closed. Nothing was stamped.",
   poll_withdrawn: "This poll was withdrawn. Nothing was stamped.",
   not_attempted: "Cancelled. Nothing was stamped and your claim was not used.",
-  temporarily_unavailable: "The outcome is unknown. Do not start another claim; the response page keeps an explicit record.",
+  temporarily_unavailable: "The outcome is unknown. Use “Retry claim” on the response page: it resends the same sealed envelope, so at most one credential is issued.",
 };
 
 function bridgeText(view: BridgeView): string {

@@ -13,6 +13,7 @@
     {"idx": 8, "version": "7", "when": 1794000000008, "tag": "0008_draft_limits", "breakpoints": true},
     {"idx": 9, "version": "7", "when": 1794000000009, "tag": "0009_least_privilege", "breakpoints": true},
     {"idx": 10, "version": "7", "when": 1794000000010, "tag": "0010_small_polls", "breakpoints": true},
-    {"idx": 11, "version": "7", "when": 1794000000011, "tag": "0011_public_eligible_count", "breakpoints": true}
+    {"idx": 11, "version": "7", "when": 1794000000011, "tag": "0011_public_eligible_count", "breakpoints": true},
+    {"idx": 12, "version": "7", "when": 1794000000012, "tag": "0012_claim_retry", "breakpoints": true}
   ]
 }

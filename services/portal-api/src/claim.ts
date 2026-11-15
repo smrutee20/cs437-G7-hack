@@ -1,8 +1,9 @@
-// SPEC.md §9 issuance: check, reserve, consume durably, then sign exactly once.
+// SPEC.md §9 issuance: check, reserve, consume durably, then sign.
 // `client` must be a dedicated feedback_issuer connection, never shared across
-// concurrent requests. Nothing here persists or logs the blinded request or the
-// blind signature.
-import { constants, createPublicKey, publicEncrypt, timingSafeEqual } from "node:crypto";
+// concurrent requests. The claim row keeps only a SHA-256 of the blinded
+// request, so the same account can recover a lost reply by resending the same
+// blinded message; nothing here persists or logs the request or the signature.
+import { constants, createHash, createPublicKey, publicEncrypt, timingSafeEqual } from "node:crypto";
 import type { Client } from "pg";
 import { decodeBase64Url, encodeBase64Url, isCanonicalUuidV4 } from "@iitgn-feedback/protocol";
 
@@ -25,7 +26,7 @@ export type ClaimDependencies = {
 };
 type PublicJwk = { kty: "RSA"; n: string; e: "AQAB" };
 
-const DB_OUTCOMES = new Set(["claimed", "not_found", "poll_closed", "poll_withdrawn", "not_eligible", "claim_consumed"]);
+const DB_OUTCOMES = new Set(["claimed", "reissue", "not_found", "poll_closed", "poll_withdrawn", "not_eligible", "claim_consumed"]);
 
 function parseRequest(body: unknown): { keyId: string; blinded: Buffer } {
   const invalid = new ClaimError("invalid_request");
@@ -54,8 +55,13 @@ function verifiesUnder(jwk: PublicJwk, signature: Uint8Array, blinded: Buffer): 
   }
 }
 
-/** Steps 2–3. Resolves only after a definitely successful durable commit. */
-async function consume(client: Client, userId: string, email: string, pollId: string, keyId: string): Promise<void> {
+/**
+ * Steps 2–3. Resolves only after a definitely successful durable commit, either of
+ * a new claim or of the check that this account's committed claim was for this
+ * exact blinded message (a lost-reply retry).
+ */
+async function consume(client: Client, userId: string, email: string, pollId: string, keyId: string,
+  blindedDigest: Buffer): Promise<void> {
   let outcome: unknown;
   try {
     await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
@@ -63,7 +69,7 @@ async function consume(client: Client, userId: string, email: string, pollId: st
     await client.query("SET LOCAL lock_timeout = '2s'");
     await client.query("SET LOCAL statement_timeout = '2s'");
     const { rows } = await client.query<{ outcome: string }>(
-      "SELECT identity.claim_entitlement($1,$2,$3,$4) AS outcome", [pollId, userId, email, keyId],
+      "SELECT identity.claim_entitlement($1,$2,$3,$4,$5) AS outcome", [pollId, userId, email, keyId, blindedDigest],
     );
     outcome = rows[0]?.outcome;
   } catch {
@@ -71,7 +77,7 @@ async function consume(client: Client, userId: string, email: string, pollId: st
     await client.query("ROLLBACK").catch(() => {});
     throw new ClaimError("capacity_unavailable");
   }
-  if (outcome !== "claimed") {
+  if (outcome !== "claimed" && outcome !== "reissue") {
     await client.query("ROLLBACK").catch(() => {});
     throw new ClaimError(typeof outcome === "string" && DB_OUTCOMES.has(outcome)
       ? outcome as ClaimErrorCode : "capacity_unavailable");
@@ -121,8 +127,9 @@ export async function issueClaim(client: Client, session: { id: string; email: s
     } catch {
       throw new ClaimError("capacity_unavailable");
     }
-    await consume(client, session.id, session.email, pollId, poll.key_id);
-    // Step 4: committed. One signer call; release only a result that verifies.
+    await consume(client, session.id, session.email, pollId, poll.key_id,
+      createHash("sha256").update(request.blinded).digest());
+    // Step 4: committed. One signer call per request; release only a result that verifies.
     let signature: Uint8Array;
     try {
       signature = await deps.sign(key, request.blinded);

@@ -2,7 +2,7 @@
 
 Reviewed 2026-11-08 on branch `foundation-feasibility`.
 
-**Verdict at review time: the synthetic local demo meets its exit criteria. A real-participant release is blocked.** Since this review, the two HTTPS origins and a Google Web OAuth client have been configured on Lightsail; institutional login, off-instance backups, ingress/privacy review, a signer image digest and security sign-off are still outstanding. The test evidence below is from loopback with invented accounts, not from the deployed infrastructure. See [aws-deployment.md](aws-deployment.md) for deployment observations.
+**Verdict at review time: the synthetic local demo meets its exit criteria. A real-participant release is blocked.** Since this review, the two HTTPS origins and a Google Web OAuth client have been configured on Lightsail, and an IITGN student has signed in and used the deployed portal (confirmed by the project team; see [issue #3](https://github.com/smrutee20/cs437-G7-hack/issues/3)). Independent inspection of the signed `email`/`hd` claims, off-instance backups, ingress/privacy review, a signer image digest and security sign-off are still outstanding. The test evidence below is from loopback with invented accounts, not from the deployed infrastructure. See [aws-deployment.md](aws-deployment.md) for deployment observations.
 
 ## Evidence run
 
@@ -25,7 +25,7 @@ All on one machine (Node 24.19.0, PostgreSQL 17 in Compose, Chromium 158.0.8127.
 
 | # | Scenario | Evidence | Status |
 | --- | --- | --- | --- |
-| 1 | OIDC verification and login failures | `tests/db/oidc.test.ts`: local RS256 IdP covering 18 token failures, reused state, login CSRF, expiry, unsafe return paths, valid login. 9 mutants killed. | **Blocked for release**: client configured, but no institutional token verified |
+| 1 | OIDC verification and login failures | `tests/db/oidc.test.ts`: local RS256 IdP covering 18 token failures, reused state, login CSRF, expiry, unsafe return paths, valid login. 9 mutants killed. One real IITGN student signed in to the deployed portal (project-team report; [issue #3](https://github.com/smrutee20/cs437-G7-hack/issues/3) documents subsequent use). | **Blocked for release**: signed institutional `email`/`hd` claims and authorization have not been independently reviewed |
 | 2 | Stable `(issuer, sub)`; alternate/reassigned addresses | `oidc.test.ts` (email change keeps the user), `claim.test.ts` (renamed account, reassigned address, stale session email) | Local |
 | 3 | Organiser isolation, mass assignment | `portal-api.test.ts`, `results-api.test.ts`, `delete-draft.test.ts`, `privileges.test.ts` (the portal role cannot change owner or withdrawal at the DB level) | Local |
 | 4 | CSRF/Origin on every mutation; no mock login or relaxed policy in production | `csrf-routes.test.ts` (7 routes × 5 variants), `production-config.test.ts`, `production-server.test.ts`, build bundle gate | Local |

@@ -139,12 +139,12 @@ Every purge is journaled.
 
 | Gate | Status |
 | --- | --- |
-| Institutional OAuth client authorised; real signed `email`/`hd` claims observed | **Blocked for release**: Google Web client configured and redirect tested, but no institutional sign-in/token verified yet. |
+| Institutional OAuth client authorised; real signed `email`/`hd` claims observed | **Blocked for release**: an IITGN student signed in and used the deployed portal (project-team report; [issue #3](https://github.com/smrutee20/cs437-G7-hack/issues/3)), but signed `email`/`hd` claims and institutional authorization have not been independently reviewed. |
 | Two approved HTTPS hostnames; logging-compliant ingress/CDN/WAF | Two hostnames live on Lightsail with Caddy (no access log); full ingress/privacy review not done. |
 | Durable PostgreSQL and encrypted private-key store; 7-day encrypted backups | PostgreSQL and encrypted keys on Lightsail disk; off-instance encrypted backups not configured. |
 | Signer container image and digest; security sign-off on the no-blinding private operation | **Blocked**. |
 | Signer service-credential provisioning and rotation | Not done (per-run token in the demo only). |
 | CI executed on a real remote | Done for synthetic/local validation: all six jobs passed on `main` ([run 42506531372](https://github.com/nishchaybhutoria/iitgn-feedback-booth/actions/runs/42506531372)); no deployed infrastructure was tested. |
 | Production mock-auth exclusion | Done: separate demo build, startup and build-time bundle checks, config refusals. |
-| All 27 acceptance scenarios | Local/synthetic evidence for all but scenario 1 (real login); see [`release-review.md`](release-review.md). |
+| All 27 acceptance scenarios | Local/synthetic test evidence for all but scenario 1's deployed signed-claim review; a real portal sign-in has been reported but is not an independent acceptance run. See [`release-review.md`](release-review.md). |
 | Recovery and withdrawal procedure exercised | Locally only (template copy of a real database). |

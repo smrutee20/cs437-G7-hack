@@ -1,6 +1,6 @@
 # AWS Lightsail deployment
 
-This is the concrete deployment of the Feedback Booth. For release requirements and incident/restore procedures, see [deployment.md](deployment.md). **Do not use real participants yet:** institutional login has not been exercised, off-instance backups are absent, and the ingress/privacy and signer security reviews are open.
+This is the concrete deployment of the Feedback Booth. For release requirements and incident/restore procedures, see [deployment.md](deployment.md). **Do not collect real feedback yet:** an IITGN student has signed in and used the deployed portal (confirmed by the project team; see [issue #3](https://github.com/smrutee20/cs437-G7-hack/issues/3)), but signed `email`/`hd` claims have not been independently inspected, off-instance backups are absent, and the ingress/privacy and signer security reviews are open.
 
 ## What is running
 
@@ -42,7 +42,7 @@ curl -fSI https://respond.freedback.tech/
 curl -sS -o /dev/null -w '%{http_code}\n' https://respond.freedback.tech/api/v1/auth/login # expect 404
 ```
 
-The login redirect proves only that the OAuth URL is configured; **it does not prove Google token verification or institutional authorization.** An authorized institutional tester must complete a sign-in before that gate can be closed.
+The login redirect by itself proves only that the OAuth URL is configured. A real IITGN student has since signed in and used the portal, but we have not recorded an independent inspection of the signed `email`/`hd` claims or institutional authorization. This observation does not close the release gate.
 
 ## Maintenance and remaining work
 

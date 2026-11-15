@@ -127,9 +127,10 @@ export function startClaimBridge(options: BridgeOptions): BridgeController {
       set("stored");
       stopped = true;
       window.removeEventListener("message", onMessage);
-      // A missing portal session needs a readable sign-in path, not a popup
-      // that vanishes before the participant can understand what happened.
-      if (delivered !== "login_required") {
+      // A missing portal session needs a readable sign-in path, and a refused
+      // account needs to see which address it used, not a popup that vanishes
+      // before the participant can understand what happened.
+      if (delivered !== "login_required" && delivered !== "not_eligible") {
         window.setTimeout(() => window.close(), Math.max(0, Math.min(5000, options.closeDelayMs?.() ?? 0)));
       }
     }

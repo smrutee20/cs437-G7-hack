@@ -29,7 +29,9 @@ export const WINDOW_TEXT: Partial<Record<ClaimWindowState, string>> = {
 const RETRY_TEXT: Record<string, string> = {
   not_attempted: "No claim was made. You can open the claim window again.",
   login_required: "Sign in to the portal in another tab, then open the claim window again. No claim was made.",
-  not_eligible: "This account is not on this poll's eligibility list. No claim was made.",
+  not_eligible: "The portal account you used is not on this poll's eligibility list, so no claim was made. " +
+    "The claim window shows which address you signed in with. If you have another IITGN address, sign in to the portal with it " +
+    "and open the claim window again.",
   rate_limited: "Too many claim attempts. Wait a minute, then try again. No claim was made.",
   capacity_unavailable: "The service is busy. No claim was made; try again shortly.",
 };

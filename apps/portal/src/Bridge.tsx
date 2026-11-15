@@ -36,6 +36,16 @@ const REFUSED: Record<string, string> = {
   temporarily_unavailable: "The outcome is unknown. Do not start another claim; the response page keeps an explicit record.",
 };
 
+/** Refusal text; not_eligible names the signed-in address so a student can tell which of their addresses was refused. */
+function refusedText(view: BridgeView): string | undefined {
+  if (view.outcome === "not_eligible" && view.email) {
+    return `You are signed in as ${view.email}, which is not on this poll's eligibility list. Nothing was stamped and your claim ` +
+      "was not used. If you have another IITGN address, sign out of the portal, sign in with that address, then open the claim " +
+      "window again from the response page.";
+  }
+  return REFUSED[view.outcome ?? ""];
+}
+
 function bridgeText(view: BridgeView): string {
   switch (view.state) {
     case "invalid_link": return "This claim link is not valid.";
@@ -48,10 +58,10 @@ function bridgeText(view: BridgeView): string {
     case "confirming": return "This uses your one claim for this poll. The portal checks your account and stamps the envelope. It never sees the credential inside.";
     case "claiming": return "Stamping…";
     case "result_sent": return view.outcome === "signed" ? "Stamped. Sending it back to the response page and waiting for it to confirm storage…"
-      : REFUSED[view.outcome ?? ""] ?? "The portal refused the request.";
+      : refusedText(view) ?? "The portal refused the request.";
     case "expired": return "The response page did not confirm in time. This window’s copy of the result has been erased.";
     case "stored": return view.outcome === "signed" ? "Stamped and stored on the response page. You can close this window."
-      : `${REFUSED[view.outcome ?? ""] ?? "Nothing was stamped."} You can close this window.`;
+      : `${refusedText(view) ?? "Nothing was stamped."} You can close this window.`;
   }
 }
 

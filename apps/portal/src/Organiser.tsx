@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button, buttonClass, Card, NoticePlate, StatusPlate, WarningPlate } from "@iitgn-feedback/ui";
+import { mixedAddressWarning } from "./address-styles";
 import { parseEligibilityImportWithMetadata } from "./eligibility-import";
 import { ResultsPanel, type Question, type Results, type ResultsView } from "./Results";
 import styles from "./Portal.module.css";
@@ -67,7 +68,7 @@ export function OrganiserApp({ session, onSignedOut }: { session: Session; onSig
   const [questions, setQuestions] = useState<Question[]>([blankQuestion()]);
   const [preview, setPreview] = useState(false);
   const [results, setResults] = useState<ResultsView | null>(null);
-  const [confirm, setConfirm] = useState<{ poll: Summary; action: "open" | "close" | "delete" } | null>(null);
+  const [confirm, setConfirm] = useState<{ poll: Summary; action: "open" | "close" | "delete"; addressWarning?: string | null } | null>(null);
 
   const refreshPolls = async () => {
     const response = await fetch("/api/v1/polls?limit=50", { credentials: "same-origin", cache: "no-store" });
@@ -139,6 +140,13 @@ export function OrganiserApp({ session, onSignedOut }: { session: Session; onSig
       await refreshPolls(); setNotice(`Poll is ${updated.status}.`);
     });
   };
+  // Checks the saved list (what opening freezes), not unsaved edits in the editor.
+  const askOpen = (poll: Summary) => void perform(async () => {
+    const response = await fetch(`/api/v1/polls/${poll.id}`, { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) throw new Error("Poll unavailable");
+    const owned = await response.json() as Poll;
+    setConfirm({ poll, action: "open", addressWarning: mixedAddressWarning(owned.eligibilityEmails) });
+  });
   const viewResults = (poll: Summary) => void perform(async () => {
     const owned = await (await fetch(`/api/v1/polls/${poll.id}`, { credentials: "same-origin", cache: "no-store" })).json() as Poll;
     const response = await fetch(`/api/v1/polls/${poll.id}/results`, { credentials: "same-origin", cache: "no-store" });
@@ -178,7 +186,7 @@ export function OrganiserApp({ session, onSignedOut }: { session: Session; onSig
               {poll.eligibilityRetention === "purged" ? " · eligibility purged" : ""}</span>
           </div>
           <div className={styles.pollActions}>
-            {poll.status === "draft" && <><Button variant="primary" size="small" disabled={busy} onClick={() => setConfirm({ poll, action: "open" })}>Open poll</Button>
+            {poll.status === "draft" && <><Button variant="primary" size="small" disabled={busy} onClick={() => askOpen(poll)}>Open poll</Button>
               <Button variant="quiet" size="small" disabled={busy} onClick={() => setConfirm({ poll, action: "delete" })}>Delete draft</Button></>}
             {poll.status === "open" && <Button variant="danger" size="small" disabled={busy} onClick={() => setConfirm({ poll, action: "close" })}>Close poll</Button>}
             {poll.status === "closed" && <Button variant="secondary" size="small" disabled={busy} onClick={() => viewResults(poll)}>View results</Button>}
@@ -249,6 +257,8 @@ export function OrganiserApp({ session, onSignedOut }: { session: Session; onSig
     </>}
     {confirm?.action === "open" && <ConfirmDialog title={`Open “${confirm.poll.title}”?`} confirmLabel="Open poll" variant="primary"
       onCancel={() => setConfirm(null)} onConfirm={() => transition(confirm.poll, "open")}>
+      {confirm.addressWarning && <div data-testid="mixed-address-warning" role="note">
+        <WarningPlate><strong>Mixed address styles. </strong>{confirm.addressWarning}</WarningPlate></div>}
       <p>Opening is irreversible. Once open:</p><ul className={styles.warnList}>{ORGANISER_WARNINGS.map((text) => <li key={text}>{text}</li>)}</ul>
     </ConfirmDialog>}
     {confirm?.action === "close" && <ConfirmDialog title={`Close “${confirm.poll.title}” now?`} confirmLabel="Close poll now" variant="danger" typed="CLOSE"

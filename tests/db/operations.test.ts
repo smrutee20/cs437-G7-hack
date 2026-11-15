@@ -69,7 +69,8 @@ async function participant(email: string) {
   return id;
 }
 const claim = async (pollId: string, userId: string, email: string, keyId: string) =>
-  (await db("issuer").query("SELECT identity.claim_entitlement($1,$2,$3,$4) AS outcome", [pollId, userId, email, keyId])).rows[0].outcome;
+  (await db("issuer").query("SELECT identity.claim_entitlement($1,$2,$3,$4,$5) AS outcome",
+    [pollId, userId, email, keyId, randomBytes(32)])).rows[0].outcome;
 /** Fixture-only time travel: moves a poll's lifecycle timestamps back with triggers disabled. */
 async function age(pollId: string, interval: string) {
   const o = db("observer");

@@ -1,7 +1,7 @@
 // Milestone 3 issuance service against real PostgreSQL. The signer double is an
 // independent OpenSSL raw private operation (native signing itself is proven in
 // tests/signer); these tests cover claim-before-sign ordering and uniqueness.
-import { createPrivateKey, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createPrivateKey, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -119,9 +119,10 @@ test("one eligible account gets one signature, released only after its claim com
   expect(Object.keys(result)).toEqual(["blindSignature"]);
   const eligibility = (await observer.query(
     "SELECT id FROM identity.eligibility WHERE poll_id=$1 AND email=$2", [poll.id, emails.alice])).rows[0].id;
-  const row = { poll_id: poll.id, user_id: users.alice, eligibility_id: eligibility };
+  const row = { poll_id: poll.id, user_id: users.alice, eligibility_id: eligibility,
+    blinded_sha256: createHash("sha256").update(attempt.blinded).digest() };
   expect(visibleAtSign).toEqual([[row]]);
-  // Claim rows hold no blinded request, signature, timestamp or response reference.
+  // Claim rows hold only a SHA-256 of the blinded request: no request, signature, timestamp or response reference.
   expect(await claimRows(poll.id)).toEqual([row]);
   const signature = await finalizeSignature(attempt.key, attempt.prepared,
     Buffer.from(result.blindSignature, "base64url"), attempt.inverse);
@@ -133,6 +134,52 @@ test("one eligible account gets one signature, released only after its claim com
   expect(await code(issueClaim(client, session("alice"), poll.id, (await request(poll)).body, deps))).toBe("claim_consumed");
   expect(calls.sign).toBe(1);
   expect(calls.release).toBe(calls.reserve);
+  expect(await claimRows(poll.id)).toHaveLength(1);
+});
+
+test("a claim whose reply is dropped can be retried with the same blinded message and yields a working credential", async () => {
+  const poll = await openedPoll();
+  const { calls, deps } = dependencies();
+  const attempt = await request(poll);
+  // The first reply is lost on the way to the browser; only the committed claim remains.
+  await issueClaim(await issuer(), session("alice"), poll.id, attempt.body, deps);
+  const retried = await issueClaim(await issuer(), session("alice"), poll.id, attempt.body, deps);
+  const signature = await finalizeSignature(attempt.key, attempt.prepared,
+    Buffer.from(retried.blindSignature, "base64url"), attempt.inverse);
+  expect(await verifySignature(attempt.key, attempt.prepared, signature)).toBe(true);
+  expect(calls).toMatchObject({ sign: 2, reserve: 2, release: 2 });
+  expect(await claimRows(poll.id)).toHaveLength(1);
+
+  // Anything other than the same account resending the same blinded message is still refused.
+  expect(await code(issueClaim(await issuer(), session("alice"), poll.id, (await request(poll)).body, deps))).toBe("claim_consumed");
+  expect(await code(issueClaim(await issuer(), session("twin"), poll.id, attempt.body, deps))).toBe("claim_consumed");
+  expect(calls.sign).toBe(2);
+  // Re-signing happens only while the poll is open.
+  await closePoll(portal, users.owner, poll.id);
+  expect(await code(issueClaim(await issuer(), session("alice"), poll.id, attempt.body, deps))).toBe("poll_closed");
+  expect(calls.sign).toBe(2);
+  expect(await claimRows(poll.id)).toHaveLength(1);
+});
+
+test("after a lost commit acknowledgement, resending the same blinded message signs it", async () => {
+  const poll = await openedPoll();
+  const { calls, deps } = dependencies();
+  const acked = await issuer();
+  const lostAck = new Proxy(acked, { get(target, property, receiver) {
+    if (property !== "query") return Reflect.get(target, property, receiver);
+    return async (text: unknown, ...rest: unknown[]) => {
+      const result = await Reflect.apply(target.query, target, [text, ...rest]);
+      if (typeof text === "string" && /^\s*COMMIT\b/i.test(text)) throw new Error("Connection terminated unexpectedly");
+      return result;
+    };
+  } });
+  const attempt = await request(poll);
+  expect(await code(issueClaim(lostAck, session("alice"), poll.id, attempt.body, deps))).toBe("temporarily_unavailable");
+  expect(calls.sign).toBe(0);
+  const retried = await issueClaim(await issuer(), session("alice"), poll.id, attempt.body, deps);
+  const signature = await finalizeSignature(attempt.key, attempt.prepared,
+    Buffer.from(retried.blindSignature, "base64url"), attempt.inverse);
+  expect(await verifySignature(attempt.key, attempt.prepared, signature)).toBe(true);
   expect(await claimRows(poll.id)).toHaveLength(1);
 });
 

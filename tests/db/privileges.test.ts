@@ -27,7 +27,7 @@ const EXPECTED: Record<string, { tables: string[]; functions: string[]; schemas:
   feedback_issuer: { schemas: ["identity", "public"],
     tables: [...["closes_at", "id", "invalidated", "state"].map((column) => `public.polls(${column}):SELECT`),
       ...["key_id", "key_version", "poll_id", "private_secret_ref", "public_jwk"].map((column) => `public.signing_keys(${column}):SELECT`)],
-    functions: ["identity.claim_entitlement(uuid,uuid,text,uuid)", ...PREDICATES] },
+    functions: ["identity.claim_entitlement(uuid,uuid,text,uuid,bytea)", ...PREDICATES] },
   feedback_auth: { schemas: ["identity", "operations"],
     tables: ["identity.oauth_transactions:DELETE", "identity.oauth_transactions:INSERT", "identity.oauth_transactions:SELECT",
       "identity.sessions:DELETE", "identity.sessions:INSERT", "identity.sessions:SELECT",
@@ -134,7 +134,7 @@ describe("runtime role privileges", () => {
       for (const sql of ["SELECT * FROM identity.claims", "SELECT * FROM anonymous.responses", "SELECT * FROM identity.users",
         "SELECT * FROM identity.sessions", "SELECT private_secret_ref FROM signing_keys", "UPDATE polls SET organiser_id = gen_random_uuid()",
         "UPDATE polls SET invalidated = false", "INSERT INTO polls(id, organiser_id, title, description, closes_at, questions) VALUES (gen_random_uuid(), gen_random_uuid(), 't', '', now(), '[]')",
-        "DELETE FROM polls", "SELECT identity.claim_entitlement(gen_random_uuid(), gen_random_uuid(), 'a@iitgn.ac.in', gen_random_uuid())"]) {
+        "DELETE FROM polls", "SELECT identity.claim_entitlement(gen_random_uuid(), gen_random_uuid(), 'a@iitgn.ac.in', gen_random_uuid(), sha256('x'::bytea))"]) {
         await expect(client.query(sql), sql).rejects.toMatchObject({ code: "42501" });
       }
     } finally { await client.end(); }

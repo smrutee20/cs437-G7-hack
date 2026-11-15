@@ -2,7 +2,7 @@
 import { createPublicKey } from "node:crypto";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { parsePreparedMessage } from "../../packages/protocol/src/credential";
-import { nodeVerifyPss } from "../fixtures/rsa";
+import { nodeRawSign, nodeVerifyPss } from "../fixtures/rsa";
 import { CSRF, PARTICIPANT, portal, respond, stubApis, syntheticPoll, type SyntheticPoll } from "./fixtures/claim-stubs";
 
 const STUB = "<!doctype html><meta charset=utf-8><title>stub</title><body>stub</body>";
@@ -138,9 +138,14 @@ test("a consumed entitlement is terminal for this browser and erases the secret"
   expect(calls).toHaveLength(1);
 });
 
-test("an uncertain claim is never retried; after two minutes only a non-secret claim_uncertain marker remains", async ({ page, context }) => {
+test("a claim whose reply is lost stays retryable; an explicit retry resends the same blinded message and yields a working credential", async ({ page, context }) => {
   const poll = syntheticPoll();
-  const { calls } = await stubApis(context, poll, { claim: () => null }); // connection reset: outcome unknown
+  let attempts = 0;
+  const { calls, submissions } = await stubApis(context, poll, {
+    // First reply lost (connection reset after the server may have committed); the retry is signed.
+    claim: (body, current) => ++attempts === 1 ? null : { status: 201, body: { blindSignature: Buffer.from(
+      nodeRawSign(current.privateKey, Buffer.from(body.blindedMessage, "base64url"))).toString("base64url") } },
+  });
   await page.clock.install();
   await prepared(page, poll);
   const popup = await openBridge(page);
@@ -148,12 +153,22 @@ test("an uncertain claim is never retried; after two minutes only a non-secret c
   await expect(page.getByTestId("claim-message")).toContainText("outcome of this claim is unknown");
   await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_sent");
   await expect(page.getByRole("button", { name: /Open claim window|Prepare my credential/ })).toHaveCount(0);
+  if (!popup.isClosed()) await popup.close();
+  // Nothing happens automatically: not on reload, and not after the old two-minute window.
   await page.reload();
-  await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_sent");
   await page.clock.fastForward("02:01");
-  await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_uncertain");
-  expect(Object.keys((await readRecord(page, poll.pollId))!).sort()).toEqual(["closesAt", "pollId", "state"]);
+  await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "claim_sent");
   expect(calls).toHaveLength(1);
+  const [retry] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Retry claim" }).click()]);
+  await retry.getByRole("button", { name: "Stamp my envelope" }).click();
+  await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "usable");
+  expect(calls).toHaveLength(2);
+  expect(calls[1].body).toEqual(calls[0].body); // same key and blinded message, never a fresh one
+  await page.getByRole("group", { name: "How was it?" }).getByLabel("4").check();
+  await page.getByRole("button", { name: "Submit answers" }).click();
+  await expect(page.getByTestId("credential")).toHaveAttribute("data-state", "accepted");
+  expect(submissions).toHaveLength(1);
+  expect(submissions[0].validCredential).toBe(true);
 });
 
 for (const failure of ["throws", "is silently lost"] as const) test(`if the claim_sent write ${failure}, no claim request is sent`, async ({ page, context }) => {

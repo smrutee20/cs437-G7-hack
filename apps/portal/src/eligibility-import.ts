@@ -1,13 +1,23 @@
 // Paste/CSV parser. Server revalidates the resulting email array independently.
 // Accepts LF newline lists and single-column RFC 4180 quoting/CRLF; no uploads.
+// Blank and whitespace-only rows are skipped, each value is trimmed, and spaces or
+// tabs around a quoted value are ignored. sourceRows holds the physical line on
+// which each returned row starts.
 export function parseEligibilityImportWithMetadata(source: string): { emails: string[]; sourceRows: number[] } {
   const invalid = (): never => { throw new Error("invalid import"); };
   if (typeof source !== "string" || source.length === 0 || source.length > 256 * 1024) invalid();
+  const isPadding = (char: string) => char === " " || char === "\t";
   const rows: string[] = [];
   const sourceRows: number[] = [];
   let physicalLine = 1, rowStart = 1;
   let value = "";
   let state: "start" | "plain" | "quoted" | "after_quote" = "start";
+  const endRow = () => {
+    const trimmed = value.trim();
+    if (trimmed) { rows.push(trimmed); sourceRows.push(rowStart); }
+    value = "";
+    state = "start";
+  };
   for (let index = 0; index < source.length; index++) {
     const char = source[index];
     if (state === "quoted") {
@@ -26,15 +36,12 @@ export function parseEligibilityImportWithMetadata(source: string): { emails: st
         if (source[index + 1] !== "\n") invalid();
         index++;
       }
-      if (!value.trim()) invalid();
-      rows.push(value);
-      sourceRows.push(rowStart);
+      endRow();
       physicalLine++;
       rowStart = physicalLine;
-      value = "";
-      state = "start";
       continue;
     }
+    if (isPadding(char) && (state === "start" || state === "after_quote")) continue;
     if (state === "after_quote") invalid();
     if (char === '"') {
       if (state !== "start") invalid();
@@ -45,12 +52,8 @@ export function parseEligibilityImportWithMetadata(source: string): { emails: st
     }
   }
   if (state === "quoted") invalid();
-  if (value) {
-    if (!value.trim()) invalid();
-    rows.push(value);
-    sourceRows.push(rowStart);
-  } else if (state !== "start" || rows.length === 0) invalid();
-  if (rows[0]?.trim().toLowerCase() === "email") { rows.shift(); sourceRows.shift(); }
+  endRow();
+  if (rows[0]?.toLowerCase() === "email") { rows.shift(); sourceRows.shift(); }
   if (rows.length === 0) invalid();
   return { emails: rows, sourceRows };
 }

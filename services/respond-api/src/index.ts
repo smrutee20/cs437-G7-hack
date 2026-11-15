@@ -70,7 +70,7 @@ export function createApp(config: Config) {
     try {
       const { rows } = await client.query(
         `SELECT id,title,description,state,invalidated,opened_at,closed_at,closes_at,questions,
-                policy_version,key_id,key_version,suite,public_jwk
+                policy_version,key_id,key_version,suite,public_jwk,eligible_count
            FROM public_polls WHERE id=$1`, [req.params.id],
       );
       if (!rows[0]) return reply.code(404).send(body("not_found"));
@@ -79,7 +79,7 @@ export function createApp(config: Config) {
         id: p.id, title: p.title, description: p.description, status: p.state, invalidated: p.invalidated,
         openedAt: p.opened_at.toISOString(), closedAt: p.closed_at?.toISOString() ?? null,
         closesAt: p.closes_at.toISOString(), questions: p.questions,
-        policy: pollPolicy(p.policy_version),
+        policy: pollPolicy(p.policy_version), eligibleCount: p.eligible_count,
         key: { keyId: p.key_id, keyVersion: p.key_version, suite: p.suite, modulusBits: 3072, publicJwk: p.public_jwk },
       };
     } finally { await release(); }

@@ -66,7 +66,16 @@ export function localDevServer(app: LocalApp, repoRoot: string) {
 
 /** Public, fixed peer origins compiled into both browser apps (never secrets). */
 export function originDefines(env: Record<string, string | undefined> = process.env) {
+  if (env.FEEDBACK_BUILD_TARGET === "deployment") {
+    for (const name of ["FEEDBACK_PORTAL_ORIGIN", "FEEDBACK_RESPOND_ORIGIN"] as const) {
+      if (!env[name]) throw new Error(`SETUP ERROR: ${name} is required for a deployment build`);
+    }
+  }
   const origins = localOrigins(env);
+  if (env.FEEDBACK_BUILD_TARGET === "deployment" &&
+    [origins.portal, origins.respond].some((url) => /\.(test|localhost|local|example|invalid|internal)$/.test(url.hostname))) {
+    throw new Error("SETUP ERROR: deployment build uses a development hostname");
+  }
   return {
     __PORTAL_ORIGIN__: JSON.stringify(origins.portal.origin),
     __RESPOND_ORIGIN__: JSON.stringify(origins.respond.origin),

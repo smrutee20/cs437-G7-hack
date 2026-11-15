@@ -83,7 +83,7 @@ The demo keeps its local journal, keys and secrets in `.certs/` (untracked), app
 
 ## Production entrypoints and operations
 
-`node services/portal-api/dist/server.js` and `node services/respond-api/dist/server.js` read only environment variables and secret files, and refuse to start on any unsafe setting. Try them without configuration to see the checks. `npm run ops -- <migrate|init-journal|check-sync|withdraw|check-keys|provision-organiser|revoke-organiser|retention|recover>` is the operator CLI. Configuration, roles, ingress and logging requirements, backups and the recovery procedure are in [`docs/deployment.md`](docs/deployment.md).
+`node services/portal-api/dist/server.js` and `node services/respond-api/dist/server.js` read only environment variables and secret files, and refuse to start on any unsafe setting. Try them without configuration to see the checks. For the two public `.freedback.tech` sites, build the browser bundles with **`npm run build:deploy`**, not plain `npm run build`: the latter bakes local `.test` origins into browser links for synthetic development. `npm run ops -- <migrate|init-journal|check-sync|withdraw|check-keys|provision-organiser|revoke-organiser|retention|recover>` is the operator CLI. Configuration, roles, ingress and logging requirements, backups and the recovery procedure are in [`docs/deployment.md`](docs/deployment.md).
 
 ## Two origins
 

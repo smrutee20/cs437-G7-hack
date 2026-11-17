@@ -9,13 +9,15 @@ import {
   BOOTH, countdown, LOSS_WARNING, outcomeText, PRIVACY_NOTICE, submitText, SUBMIT_WARNING, SUCCESS_BODY, TEXT_WARNING, WINDOW_TEXT,
 } from "./copy";
 import { onRecordChange, saveDraft, sweep, type CredentialRecord, type SubmitPendingRecord } from "./credential-store";
+import { smallPollWarning } from "./small-poll";
 import { beginSubmission, sendSubmission } from "./submit-flow";
 import styles from "./PollPage.module.css";
 
 type PublicQuestion = { id: string; type: "single_choice" | "rating" | "free_text"; prompt: string; required: boolean;
   options?: { id: string; label: string }[] };
 export type PublicPoll = { id: string; title: string; description: string; status: "open" | "closed"; invalidated: boolean;
-  closesAt: string; closedAt: string | null; questions: PublicQuestion[]; key: { keyId: string; keyVersion: 1; publicJwk: unknown } };
+  closesAt: string; closedAt: string | null; questions: PublicQuestion[]; key: { keyId: string; keyVersion: 1; publicJwk: unknown };
+  policy: { minResponses: number }; eligibleCount?: number };
 type Draft = Record<string, string>;
 const TYPE_LABEL = { single_choice: "Single choice", rating: "Rating", free_text: "Free text" } as const;
 const WAITING: ReadonlySet<string> = new Set(["waiting_ready", "waiting_ack", "connected", "request_sent", "finishing"]);
@@ -162,6 +164,7 @@ function PollBooth({ poll, onClosed }: { poll: PublicPoll; onClosed: (invalidate
   const frozen = !open || pending !== null || sending || !["none", "prepared", "claim_sent", "usable"].includes(state);
   const windowBusy = WAITING.has(win.state);
   const finished = state === "accepted";
+  const smallPoll = smallPollWarning(poll);
 
   const key = sending ? "sending" : state === "prepared" && windowBusy ? "waiting"
     : state === "none" && !open ? (poll.invalidated ? "withdrawn" : "closed") : state;
@@ -280,6 +283,8 @@ function PollBooth({ poll, onClosed }: { poll: PublicPoll; onClosed: (invalidate
             : <p className={styles.body} data-testid="credential" data-state={state}>{view.body}</p>}
         </div>
         {!finished && !unsupported && <StepList steps={steps.map((label, i) => ({ label, state: stepStates(view.step)[i] }))} />}
+        {open && smallPoll && (state === "none" || state === "prepared") && <div data-testid="small-poll-warning" role="note">
+          <WarningPlate><strong>Small poll. </strong>{smallPoll}</WarningPlate></div>}
         {open && (state === "none" || state === "prepared") && <WarningPlate>{LOSS_WARNING}</WarningPlate>}
         {open && state === "usable" && <WarningPlate>{SUBMIT_WARNING}</WarningPlate>}
         {primary}

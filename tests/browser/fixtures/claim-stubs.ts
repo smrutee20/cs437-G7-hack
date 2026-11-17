@@ -17,7 +17,10 @@ export type SyntheticPoll = {
   pollId: string; keyId: string; title: string; privateKey: KeyObject;
   publicJwk: { kty: "RSA"; n: string; e: "AQAB" }; dto: Record<string, unknown>;
 };
-export function syntheticPoll(overrides: { pollId?: string; key?: ReturnType<typeof freshKey>; questions?: unknown[] } = {}): SyntheticPoll {
+export function syntheticPoll(overrides: {
+  pollId?: string; key?: ReturnType<typeof freshKey>; questions?: unknown[]; eligibleCount?: number;
+  policy?: { version: number; minEligible: number; minResponses: number; minAnswersPerQuestion: number };
+} = {}): SyntheticPoll {
   const key = overrides.key ?? (cachedKey ??= freshKey());
   const pollId = overrides.pollId ?? randomUUID(), keyId = randomUUID(), title = "Synthetic claim poll";
   const publicJwk = { kty: "RSA" as const, n: key.jwk.n as string, e: "AQAB" as const };
@@ -26,7 +29,8 @@ export function syntheticPoll(overrides: { pollId?: string; key?: ReturnType<typ
     openedAt: new Date(Date.now() - 60_000).toISOString(), closedAt: null,
     closesAt: new Date(Date.now() + 86_400_000).toISOString(),
     questions: overrides.questions ?? [{ id: randomUUID(), type: "rating", prompt: "How was it?", required: true }],
-    policy: { version: 2, minEligible: 1, minResponses: 1, minAnswersPerQuestion: 1 },
+    policy: overrides.policy ?? { version: 2, minEligible: 1, minResponses: 1, minAnswersPerQuestion: 1 },
+    eligibleCount: overrides.eligibleCount ?? 10,
     key: { keyId, keyVersion: 1, suite: "RSABSSA-SHA384-PSS-Randomized", modulusBits: 3072, publicJwk },
   } };
 }

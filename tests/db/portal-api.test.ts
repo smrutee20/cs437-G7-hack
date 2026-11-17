@@ -56,7 +56,7 @@ test("authenticated session exposes only own verified profile and synchronizer t
   expect((await send("nobody","GET","/session")).statusCode).toBe(401);
 });
 
-test("owner creates a draft via guarded API; other owners see 404 and no private/count fields",async()=>{
+test("owner creates a draft via guarded API; other owners see 404 and no private fields or claim counts",async()=>{
   expect((await send("owner","POST","/polls",input(),"bad")).statusCode).toBe(403);
   const wrongType=await app.inject({method:"POST",url:"/api/v1/polls",
     headers:{cookie:"__Host-session=owner",origin,"x-csrf-token":"owner-csrf","content-type":"text/plain"},
@@ -104,9 +104,9 @@ test("owner creates a draft via guarded API; other owners see 404 and no private
   expect(opened.json()).toMatchObject({status:"open",revision:2});
   const context=await send("outsider","GET",`/polls/${dto.id}/claim-context`,undefined,"outsider-csrf");
   expect(context.statusCode).toBe(200);
-  expect(Object.keys(context.json()).sort()).toEqual(["id","title","description","status","invalidated","openedAt","closedAt","closesAt","questions","policy","key"].sort());
-  expect(context.json()).toMatchObject({id:dto.id,status:"open",key:{keyVersion:1,suite:"RSABSSA-SHA384-PSS-Randomized",modulusBits:3072}});
-  expect(JSON.stringify(context.json())).not.toMatch(/student\d+@|owner|eligibleCount|claim|privateSecretRef/i);
+  expect(Object.keys(context.json()).sort()).toEqual(["id","title","description","status","invalidated","openedAt","closedAt","closesAt","questions","policy","eligibleCount","key"].sort());
+  expect(context.json()).toMatchObject({id:dto.id,status:"open",eligibleCount:10,key:{keyVersion:1,suite:"RSABSSA-SHA384-PSS-Randomized",modulusBits:3072}});
+  expect(JSON.stringify(context.json())).not.toMatch(/student\d+@|owner|claim|privateSecretRef/i);
   expect((await send("nobody","GET",`/polls/${dto.id}/claim-context`)).statusCode).toBe(401);
   // A browser/app clock cannot authorize early effective closure.
   const clock=vi.spyOn(Date,"now").mockReturnValue(Date.now()+40*86400000);

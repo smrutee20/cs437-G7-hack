@@ -41,8 +41,8 @@ test("anonymous public metadata hides drafts, eligibility and identity; closed m
   expect(reply.statusCode).toBe(200);
   expect(reply.headers["cache-control"]).toBe("no-store");
   const dto=reply.json();
-  expect(Object.keys(dto).sort()).toEqual(["closedAt","closesAt","description","id","invalidated","key","openedAt","policy","questions","status","title"].sort());
-  expect(dto).toMatchObject({id,status:"open",key:{keyVersion:1,modulusBits:3072,
+  expect(Object.keys(dto).sort()).toEqual(["closedAt","closesAt","description","eligibleCount","id","invalidated","key","openedAt","policy","questions","status","title"].sort());
+  expect(dto).toMatchObject({id,status:"open",eligibleCount:10,key:{keyVersion:1,modulusBits:3072,
     suite:"RSABSSA-SHA384-PSS-Randomized",publicJwk:{kty:"RSA",e:"AQAB"}}});
   expect(dto.key.publicJwk.n).toHaveLength(512);
   expect(Object.keys(dto.key).sort()).toEqual(["keyId","keyVersion","modulusBits","publicJwk","suite"].sort());

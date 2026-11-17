@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { parseIsolatedOrigins } from "../../packages/config/src/origins";
+import { originDefines } from "../../packages/config/src/local-dev";
 
 // Rules come from SPEC.md §6 (distinct HTTPS hostnames; different ports are not
 // cookie isolation), §16 (fail closed on identical hostnames, HTTP, wildcards),
@@ -38,5 +39,27 @@ describe("portal/response origin isolation preflight", () => {
     ["an empty value", ""],
   ])("rejects a response origin with %s", (_label, respond) => {
     expect(() => parseIsolatedOrigins("https://portal.feedback.test:4173", respond)).toThrow();
+  });
+});
+
+// Deployment builds must never silently bake the synthetic .test hosts into public links or the claim bridge.
+describe("deployment browser origins", () => {
+  const deploy = { FEEDBACK_BUILD_TARGET: "deployment" };
+  test("requires both explicit public origins instead of falling back to local defaults", () => {
+    expect(() => originDefines(deploy)).toThrow(/FEEDBACK_PORTAL_ORIGIN|FEEDBACK_RESPOND_ORIGIN/);
+    expect(() => originDefines({ ...deploy, FEEDBACK_PORTAL_ORIGIN: "https://portal.freedback.tech" })).toThrow(/FEEDBACK_RESPOND_ORIGIN/);
+  });
+
+  test("refuses development origins in deployment bundles", () => {
+    expect(() => originDefines({ ...deploy, FEEDBACK_PORTAL_ORIGIN: "https://portal.freedback.tech",
+      FEEDBACK_RESPOND_ORIGIN: "https://respond.feedback.test:4174" })).toThrow(/development hostname/);
+  });
+
+  test("bakes distinct public origins for the organiser link and claim bridge", () => {
+    expect(originDefines({ ...deploy, FEEDBACK_PORTAL_ORIGIN: "https://portal.freedback.tech",
+      FEEDBACK_RESPOND_ORIGIN: "https://respond.freedback.tech" })).toEqual({
+      __PORTAL_ORIGIN__: '"https://portal.freedback.tech"',
+      __RESPOND_ORIGIN__: '"https://respond.freedback.tech"',
+    });
   });
 });
